@@ -1,0 +1,1 @@
+make run KARCH=riscv64 KCC=riscv64-elf-gcc KLD=riscv64-elf-ld

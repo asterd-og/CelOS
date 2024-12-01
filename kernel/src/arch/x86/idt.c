@@ -3,6 +3,7 @@
 #include <x86/ports.h>
 #include <context.h>
 #include <printf.h>
+#include <interrupt.h>
 
 const char *g_pszMessages[32] = {
     "Division by zero",
@@ -42,7 +43,6 @@ const char *g_pszMessages[32] = {
 __attribute__((aligned(0x10))) static IdtEntry g_IdtEntries[256];
 static IdtDescriptor g_IdtDesc;
 extern void *g_pIdtIntTable[];
-void *g_pIrqHandlers[256];
 
 void KeSetIdtEntry(uint16_t Vector, void *Isr, uint8_t Flags);
 
@@ -72,20 +72,6 @@ void KeSetIdtEntry(uint16_t Vector, void *Isr, uint8_t Flags) {
     pEntry->Reserved = 0;
 }
 
-uint8_t KeGetFreeVector() {
-    for (int i = 16; i < 256; i++) {
-        if (g_pIrqHandlers[i] == NULL)
-            return i;
-    }
-    return 0;
-}
-
-void KeInstallIrq(uint8_t Vector, void *Handler, bool Remap) {
-    g_pIrqHandlers[Vector] = Handler;
-    if (Remap)
-        KeIoApicRemapIrq(g_pMpIoApic, Vector, Vector + 32, false);
-}
-
 void KeHandleIsr(Context *pContext) {
     printf("ISR Caught: %s.\n", g_pszMessages[pContext->IntNo]);
     for (;;) {
@@ -94,11 +80,12 @@ void KeHandleIsr(Context *pContext) {
 }
 
 void KeHandleIrq(Context *pContext) {
-    void(*fnHandler)(Context*) = g_pIrqHandlers[pContext->IntNo - 32];
-    if (!fnHandler) {
-        printf("Warning: Caught unhandled IRQ %d\n", pContext->IntNo);
-        KeLocalApicEoi();
+    int Ret = KxHandleIrq(pContext->IntNo - 32, pContext);
+    if (Ret == INT_UNCAUGHT) {
+        printf("BAD: Uncaught interrupt %d.\n", pContext->IntNo);
+        return;
+    } else if (Ret == INT_QUEUED) {
+        printf("INFO: Queued interrupt %d.\n", pContext->IntNo);
         return;
     }
-    fnHandler(pContext);
 }

@@ -129,6 +129,7 @@ void KeMain(void) {
     Proc *pProcB = PsCreateProcOnCpu(1);
     Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_LOW);
     Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_HIGH);
+
     KxSchedInit();
 
     // We're done, just hang...

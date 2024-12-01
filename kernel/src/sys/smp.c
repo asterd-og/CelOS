@@ -3,6 +3,7 @@
 #include <alloc.h>
 #include <spinlock.h>
 #include <printf.h>
+#include <pmm.h>
 
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_smp_request SmpRequest = {
@@ -22,9 +23,7 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
 
     KeArchSmpCpuInit(pSmpInfo, &pCpu->ArchInfo);
     pCpu->CpuNum = KeArchSmpGetCpuNum();
-    pCpu->pProcList = NULL;
-    pCpu->pCurrentThread = NULL;
-    pCpu->pCurrentProc = NULL;
+    pCpu->IPL = 0xf;
 
     printf("Cpu %ld Initialised.\n", pSmpInfo->lapic_id);
     g_SmpStartedCount++;
@@ -36,15 +35,13 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
 void KeSmpInit() {
     struct limine_smp_response *pSmpResponse = SmpRequest.response;
     g_pSmpCpuList = (CpuInfo*)MmAlloc(sizeof(CpuInfo) * pSmpResponse->cpu_count);
+    memset(g_pSmpCpuList, 0, sizeof(CpuInfo) * pSmpResponse->cpu_count);
     uint64_t BspID = pSmpResponse->bsp_lapic_id;
 
-    CpuInfo *BspCpu = &g_pSmpCpuList[0];
-    KeArchSmpInit(&BspCpu->ArchInfo);
-    BspCpu->pCurrentPageMap = g_pKernelPageMap;
-    BspCpu->CpuNum = 0;
-    BspCpu->pProcList = NULL;
-    BspCpu->pCurrentThread = NULL;
-    BspCpu->pCurrentProc = NULL;
+    CpuInfo *pBspCpu = &g_pSmpCpuList[0];
+    KeArchSmpInit(&pBspCpu->ArchInfo);
+    pBspCpu->pCurrentPageMap = g_pKernelPageMap;
+    pBspCpu->IPL = 0xf;
 
     for (uint64_t i = 0; i < pSmpResponse->cpu_count; i++) {
         if (pSmpResponse->cpus[i]->lapic_id != BspID) {

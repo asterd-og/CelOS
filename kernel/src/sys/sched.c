@@ -7,6 +7,7 @@
 #include <x86/idt.h>
 #include <x86/apic.h>
 #endif
+#include <interrupt.h>
 #include <printf.h>
 
 #define QUANTUM 5
@@ -17,9 +18,9 @@ uint8_t g_SchedVector = 0;
 void KxSchedule(Context *pCtx);
 
 void KxSchedInit() {
+    g_SchedVector = KxGetFreeIrq();
+    KxInstallIrq(g_SchedVector, KxSchedule, 1);
     #if defined (__x86_64__)
-    g_SchedVector = KeGetFreeVector();
-    KeInstallIrq(g_SchedVector, KxSchedule, false);
     KeLocalApicIpiAll(0, 32 + g_SchedVector);
     #endif
 }
@@ -73,10 +74,7 @@ Proc *PsCreateProc() {
     return pProc;
 }
 
-// TODO: Refactor this code
 void KxSchedule(Context *pCtx) {
-    MmSwitchPageMap(g_pKernelPageMap); // TODO: Share kernel allocations
-    // So I dont need to switch page map to the kernel on every schedule call
     CpuInfo *pCpu = KeSmpGetCpu();
     if (!pCpu->pCurrentProc) {
         KeLocalApicEoi();

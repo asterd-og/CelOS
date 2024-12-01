@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #if defined (__x86_64__)
 #define MM_READ 1
@@ -16,8 +17,8 @@
 #endif
 
 typedef struct VirtMemRegion {
+    bool Free;
     uint64_t VirtualAddress;
-    uint64_t PhysicalAddress;
     uint64_t Pages;
     uint64_t Flags;
     struct VirtMemRegion* pNext;
@@ -34,7 +35,7 @@ extern PageMap *g_pKernelPageMap;
 void MmVirtInit();
 void MmSwitchPageMap(PageMap *pPageMap);
 PageMap *MmNewPageMap();
-void MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags);
+uint64_t MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags);
 void MmVirtUnmap(PageMap *pPageMap, uint64_t VirtualAddress);
 uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress);
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags);

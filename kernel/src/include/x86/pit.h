@@ -5,3 +5,4 @@
 
 void KePitInit();
 void KePitSleep(uint64_t Ms);
+void KePitUninstall();

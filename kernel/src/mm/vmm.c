@@ -28,11 +28,10 @@ extern char RodataEndLD[];
 extern char DataStartLD[];
 extern char DataEndLD[];
 
-VirtMemRegion *MmNewRegion(uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Pages, uint64_t Flags) {
+VirtMemRegion *MmNewRegion(uint64_t VirtualAddress, uint64_t Pages, uint64_t Flags) {
     VirtMemRegion *pRegion = HIGHER_HALF(MmPhysAllocatePage());
     if (!(PHYSICAL(pRegion))) return NULL;
     pRegion->VirtualAddress = VirtualAddress;
-    pRegion->PhysicalAddress = PhysicalAddress;
     pRegion->Pages = Pages;
     pRegion->Flags = Flags;
     return pRegion;
@@ -87,7 +86,7 @@ void MmVirtInit() {
     uint64_t DataStart = ALIGN_DOWN((uint64_t)DataStartLD, PAGE_SIZE);
     uint64_t DataEnd = ALIGN_UP((uint64_t)DataEndLD, PAGE_SIZE);
 
-    for (uint64_t gb4 = 0; gb4 < 0x100000000; gb4 += PAGE_SIZE)
+    for (uint64_t gb4 = 0x1000; gb4 < 0x100000000; gb4 += PAGE_SIZE)
         MmVirtMap(g_pKernelPageMap, (uint64_t)HIGHER_HALF(gb4), gb4, MM_READ | MM_WRITE);
 
     struct limine_memmap_entry *pMmapEntry;
@@ -110,7 +109,7 @@ void MmVirtInit() {
     for (uint64_t Data = DataStart; Data < DataEnd; Data += PAGE_SIZE)
         MmVirtMap(g_pKernelPageMap, Data, Data - KernelVirtualAddress + KernelPhysicalAddress, MM_READ | MM_WRITE | MM_NX);
 
-    VirtMemRegion *pMemRegion = MmNewRegion(0, 0, 1, MM_READ | MM_WRITE);
+    VirtMemRegion *pMemRegion = MmNewRegion(HIGHER_HALF(0) + 0x100000000000, 1, MM_READ | MM_WRITE);
     MmAppendRegion(g_pKernelPageMap, pMemRegion);
 
     MmSwitchPageMap(g_pKernelPageMap);
@@ -136,8 +135,37 @@ PageMap *MmNewPageMap() {
     return pPageMap;
 }
 
-void MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags) {
+VirtMemRegion *MmVirtFindRegion(PageMap *pPageMap, uint64_t PageCount) {
+    VirtMemRegion *pRegion = pPageMap->pVirtMemHead->pNext;
+    if (pRegion->pNext == pPageMap->pVirtMemHead)
+        goto NotFound;
+    // Find first fit
+    for (; pRegion != pPageMap->pVirtMemHead; pRegion = pRegion->pNext) {
+        if (pRegion->pNext == pPageMap->pVirtMemHead)
+            break;
+        uint64_t RegionEnd = pRegion->VirtualAddress + (pRegion->Pages * PAGE_SIZE);
+        if (DIV_ROUND_UP(pRegion->pNext->VirtualAddress - RegionEnd, PAGE_SIZE) >= PageCount) {
+            VirtMemRegion *pNewRegion = MmNewRegion(RegionEnd, PageCount, 0);
+            MmInsertRegion(pNewRegion, pRegion);
+            return pRegion;
+        }
+    }
+NotFound:
+    uint64_t VirtualAddress = pPageMap->pVirtMemHead->pPrev->VirtualAddress + (pPageMap->pVirtMemHead->pPrev->Pages * PAGE_SIZE);
+    pRegion = MmNewRegion(VirtualAddress, PageCount, 0);
+    MmAppendRegion(pPageMap, pRegion);
+    return pRegion;
+}
+
+uint64_t MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags) {
+    if (VirtualAddress == 0) {
+        // Find new virtual address
+        VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, 1);
+        pRegion->Flags = Flags;
+        VirtualAddress = pRegion->VirtualAddress;
+    }
     MmArchVirtMap(pPageMap->pTopLevel, VirtualAddress, PhysicalAddress, Flags);
+    return VirtualAddress;
 }
 
 void MmVirtUnmap(PageMap *pPageMap, uint64_t VirtualAddress) {
@@ -148,16 +176,14 @@ uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress) {
     return MmArchGetPagePhysicalAddress(pPageMap->pTopLevel, VirtualAddress);
 }
 
-// TODO: Search for first fit
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags) {
-    uint64_t VirtualAddress = pPageMap->pVirtMemHead->pPrev->VirtualAddress + (pPageMap->pVirtMemHead->pPrev->Pages * PAGE_SIZE);
+    VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, Pages);
+    uint64_t VirtualAddress = pRegion->VirtualAddress;
     uint64_t PhysicalAddress = 0;
     for (uint64_t i = 0; i < Pages; i++) {
         PhysicalAddress = (uint64_t)MmPhysAllocatePage();
         MmVirtMap(pPageMap, VirtualAddress + i * PAGE_SIZE, PhysicalAddress + i * PAGE_SIZE, Flags);
     }
-    VirtMemRegion *pRegion = MmNewRegion(VirtualAddress, PhysicalAddress, Pages, Flags);
-    MmAppendRegion(pPageMap, pRegion);
     return (void*)VirtualAddress;
 }
 

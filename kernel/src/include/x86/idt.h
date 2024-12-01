@@ -21,5 +21,3 @@ typedef struct {
 
 void KeIdtInit();
 void KeIdtReload();
-uint8_t KeGetFreeVector();
-void KeInstallIrq(uint8_t Vector, void *Handler, bool Remap);

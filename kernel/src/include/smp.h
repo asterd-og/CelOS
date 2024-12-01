@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <vmm.h>
 #if defined (__x86_64__)
 #include <x86/smp.h>
@@ -12,8 +13,13 @@ typedef struct {
     ArchCpuInfo ArchInfo;
     PageMap *pCurrentPageMap;
     uint64_t CpuNum;
-    Proc *pProcList;
 
+    uint8_t IPL;
+    uint8_t QueuedIrqs[256];
+    uint8_t QueuedIrqIdx;
+    bool RunningIrq;
+
+    Proc *pProcList;
     Proc *pCurrentProc;
     Thread *pCurrentThread;
 } CpuInfo;

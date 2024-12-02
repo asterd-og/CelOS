@@ -20,4 +20,4 @@ uint8_t KxGetFreeIrq();
 void KxInstallIrq(uint8_t Irq, void *pHandler, uint8_t IPL);
 void KxUninstallIrq(uint8_t Irq);
 void KxSendInt(uint32_t CpuNum, uint8_t Irq);
-void KxLowerIpl(uint8_t IPL);
+void KxSendIntAll(uint8_t Irq);

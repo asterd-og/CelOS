@@ -64,5 +64,8 @@ void KxSendInt(uint32_t CpuNum, uint8_t Irq) {
     #endif
 }
 
-void KxLowerIpl(uint8_t IPL) {
+void KxSendIntAll(uint8_t Irq) {
+    #if defined (__x86_64__)
+    KeLocalApicIpiAll(KeSmpGetCpu()->CpuNum, Irq + 32);
+    #endif
 }

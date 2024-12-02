@@ -3,7 +3,6 @@
 #include <smp.h>
 #include <string.h>
 #if defined (__x86_64__)
-#include <x86/idt.h>
 #include <x86/apic.h>
 #endif
 #include <interrupt.h>
@@ -20,9 +19,7 @@ void KxSchedule(Context *pCtx);
 void KxSchedInit() {
     g_SchedVector = KxGetFreeIrq();
     KxInstallIrq(g_SchedVector, KxSchedule, 1);
-    #if defined (__x86_64__)
-    KeLocalApicIpiAll(0, 32 + g_SchedVector);
-    #endif
+    KxSendIntAll(g_SchedVector);
 }
 
 Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum) {

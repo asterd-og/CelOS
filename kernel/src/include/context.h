@@ -32,5 +32,9 @@ typedef struct {
 
 #define CTX_STK(ctx) ctx.RSP
 #define CTX_IP(ctx) ctx.RIP
+#define CTX_SEG(ctx) \
+    ctx.CS = 0x08; \
+    ctx.SS = 0x10
+#define CTX_FLAGS(ctx) ctx.RFlags = 0x202
 
 #endif

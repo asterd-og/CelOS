@@ -1,5 +1,4 @@
 #include <sched.h>
-#include <alloc.h>
 #include <pmm.h>
 #include <smp.h>
 #include <string.h>
@@ -28,12 +27,17 @@ void KxSchedInit() {
 
 Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum) {
     Thread *pThread = (Thread*)MmAlloc(sizeof(Thread));
-    pThread->Stack = (uint64_t)HIGHER_HALF(MmPhysAllocatePage());
+
+    AllocatorDescriptor *pOldAllocator = KeSmpSwitchAllocator(pProc->pAllocator);
+    PageMap *pOldPageMap = MmSwitchPageMap(pProc->pPageMap);
+    pThread->Stack = (uint64_t)MmAlloc(PAGE_SIZE * 3);
+    MmSwitchPageMap(pOldPageMap);
+    KeSmpSwitchAllocator(pOldAllocator);
+
     CTX_IP(pThread->Ctx) = (uint64_t)pEntry;
-    CTX_STK(pThread->Ctx) = pThread->Stack + PAGE_SIZE;
-    pThread->Ctx.CS = 0x08;
-    pThread->Ctx.SS = 0x10;
-    pThread->Ctx.RFlags = 0x202;
+    CTX_STK(pThread->Ctx) = pThread->Stack + (PAGE_SIZE * 3);
+    CTX_SEG(pThread->Ctx);
+    CTX_FLAGS(pThread->Ctx);
     pThread->pPageMap = pProc->pPageMap;
     pThread->Priority = Priority;
     pThread->Flags = THREAD_READY;
@@ -81,6 +85,11 @@ Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t Cp
 Proc *PsCreateProc() {
     Proc *pProc = (Proc*)MmAlloc(sizeof(Proc));
     pProc->pPageMap = MmNewPageMap();
+
+    PageMap *pOldPageMap = MmSwitchPageMap(pProc->pPageMap);
+    pProc->pAllocator = MmAllocInit();
+    MmSwitchPageMap(pOldPageMap);
+
     pProc->ID = g_PID++;
     pProc->pThreads = NULL;
     return pProc;
@@ -112,6 +121,7 @@ void KxSchedule(Context *pCtx) {
     pThread->Flags |= THREAD_RUNNING;
     memcpy(pCtx, &pThread->Ctx, sizeof(Context));
     MmSwitchPageMap(pThread->pPageMap);
+    KeSmpSwitchAllocator(((Proc*)(pThread->pProc))->pAllocator);
     KeLocalApicEoi();
     KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * pThread->Priority);
 }

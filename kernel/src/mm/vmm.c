@@ -6,6 +6,7 @@
 #include <printf.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <smp.h>
 #include <mmu.h>
 
 __attribute__((used, section(".limine_requests")))
@@ -115,8 +116,12 @@ void MmVirtInit() {
     MmSwitchPageMap(g_pKernelPageMap);
 }
 
-void MmSwitchPageMap(PageMap *pPageMap) {
+PageMap *MmSwitchPageMap(PageMap *pPageMap) {
+    PageMap *pOldPageMap = MmGetPageMap();
     MmArchSwitchPageMap(pPageMap->pTopLevel);
+    if (g_SmpStarted)
+        KeSmpGetCpu()->pCurrentPageMap = pPageMap;
+    return pOldPageMap;
 }
 
 PageMap *MmNewPageMap() {
@@ -129,6 +134,9 @@ PageMap *MmNewPageMap() {
     memset(pPageMap->pVirtMemHead, 0, PAGE_SIZE);
     pPageMap->pVirtMemHead->pNext = pPageMap->pVirtMemHead;
     pPageMap->pVirtMemHead->pPrev = pPageMap->pVirtMemHead;
+
+    VirtMemRegion *pMemRegion = MmNewRegion(0, 1, MM_READ | MM_WRITE);
+    MmAppendRegion(pPageMap, pMemRegion);
 
     for (uint64_t i = 256; i < 512; i++)
         pPageMap->pTopLevel[i] = g_pKernelPageMap->pTopLevel[i];
@@ -178,11 +186,12 @@ uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress) {
 
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags) {
     VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, Pages);
+    pRegion->Flags = Flags;
     uint64_t VirtualAddress = pRegion->VirtualAddress;
     uint64_t PhysicalAddress = 0;
     for (uint64_t i = 0; i < Pages; i++) {
         PhysicalAddress = (uint64_t)MmPhysAllocatePage();
-        MmVirtMap(pPageMap, VirtualAddress + i * PAGE_SIZE, PhysicalAddress + i * PAGE_SIZE, Flags);
+        MmVirtMap(pPageMap, VirtualAddress + i * PAGE_SIZE, PhysicalAddress, Flags);
     }
     return (void*)VirtualAddress;
 }
@@ -205,4 +214,10 @@ void MmVirtFreePages(PageMap *pPageMap, void *pPtr) {
             break;
         }
     }
+}
+
+PageMap *MmGetPageMap() {
+    if (g_SmpStarted)
+        return KeSmpGetCpu()->pCurrentPageMap;
+    return g_pKernelPageMap;
 }

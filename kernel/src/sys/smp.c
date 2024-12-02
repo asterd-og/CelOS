@@ -15,6 +15,10 @@ CpuInfo *g_pSmpCpuList;
 SpinLock g_SmpLock;
 uint64_t g_SmpStartedCount = 0;
 
+AllocatorDescriptor *g_pKernelAllocator = NULL;
+
+bool g_SmpStarted = false;
+
 void KeSmpCreateThreadQueue(CpuInfo *pCpu) {
     ThreadQueue *pThreadHighQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
     ThreadQueue *pThreadMedQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
@@ -46,6 +50,7 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
     KeArchSmpCpuInit(pSmpInfo, &pCpu->ArchInfo);
     pCpu->CpuNum = KeArchSmpGetCpuNum();
     pCpu->IPL = 0xf;
+    pCpu->pCurrentAllocator = g_pKernelAllocator;
     KeSmpCreateThreadQueue(pCpu);
 
     printf("Cpu %ld Initialised.\n", pSmpInfo->lapic_id);
@@ -57,7 +62,8 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
 
 void KeSmpInit() {
     struct limine_smp_response *pSmpResponse = SmpRequest.response;
-    g_pSmpCpuList = (CpuInfo*)MmAlloc(sizeof(CpuInfo) * pSmpResponse->cpu_count);
+    g_pSmpCpuList = (CpuInfo*)MmVirtAllocatePages(g_pKernelPageMap,
+        DIV_ROUND_UP(sizeof(CpuInfo) * pSmpResponse->cpu_count, PAGE_SIZE), MM_READ | MM_WRITE);
     memset(g_pSmpCpuList, 0, sizeof(CpuInfo) * pSmpResponse->cpu_count);
     uint64_t BspID = pSmpResponse->bsp_lapic_id;
 
@@ -65,6 +71,10 @@ void KeSmpInit() {
     KeArchSmpInit(&pBspCpu->ArchInfo);
     pBspCpu->pCurrentPageMap = g_pKernelPageMap;
     pBspCpu->IPL = 0xf;
+
+    g_pKernelAllocator = MmAllocInit();
+    pBspCpu->pCurrentAllocator = g_pKernelAllocator;
+
     KeSmpCreateThreadQueue(pBspCpu);
 
     for (uint64_t i = 0; i < pSmpResponse->cpu_count; i++) {
@@ -75,6 +85,7 @@ void KeSmpInit() {
     }
     while (g_SmpStartedCount < pSmpResponse->cpu_count - 1)
         __asm__ volatile ("pause");
+    g_SmpStarted = true;
 }
 
 CpuInfo *KeSmpGetCpu() {
@@ -83,4 +94,11 @@ CpuInfo *KeSmpGetCpu() {
 
 CpuInfo *KeSmpGetCpuByNum(uint32_t Num) {
     return &g_pSmpCpuList[Num];
+}
+
+AllocatorDescriptor *KeSmpSwitchAllocator(AllocatorDescriptor *pAllocator) {
+    CpuInfo *pCpu = KeSmpGetCpu();
+    AllocatorDescriptor *pOldAllocator = pCpu->pCurrentAllocator;
+    pCpu->pCurrentAllocator = pAllocator;
+    return pOldAllocator;
 }

@@ -146,7 +146,7 @@ void KeMain(void) {
     Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_LOW, 2);
     Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_HIGH, 2);
 
-    KxSchedInit();
+    // KxSchedInit();
 
     // We're done, just hang...
     hcf();

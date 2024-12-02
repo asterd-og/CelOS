@@ -33,10 +33,11 @@ typedef struct {
 extern PageMap *g_pKernelPageMap;
 
 void MmVirtInit();
-void MmSwitchPageMap(PageMap *pPageMap);
+PageMap *MmSwitchPageMap(PageMap *pPageMap);
 PageMap *MmNewPageMap();
 uint64_t MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags);
 void MmVirtUnmap(PageMap *pPageMap, uint64_t VirtualAddress);
 uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress);
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags);
 void MmVirtFreePages(PageMap *pPageMap, void *pPtr);
+PageMap *MmGetPageMap();

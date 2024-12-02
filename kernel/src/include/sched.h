@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <context.h>
+#include <alloc.h>
 #include <vmm.h>
 
 #define THREAD_READY 1
@@ -16,8 +17,6 @@ enum ThreadPriority {
     THREAD_HIGH = 3
 };
 
-struct Proc;
-
 typedef struct Thread {
     Context Ctx;
     PageMap *pPageMap;
@@ -27,12 +26,13 @@ typedef struct Thread {
     uint32_t CpuNum;
     struct Thread *pNext;
     struct Thread *pPrev;
-    struct Proc *pProc;
+    void *pProc;
 } Thread;
 
 typedef struct {
     PageMap *pPageMap;
     int ID;
+    AllocatorDescriptor *pAllocator;
     struct Proc *pNext;
     struct Proc *pPrev;
     Thread *pThreads;

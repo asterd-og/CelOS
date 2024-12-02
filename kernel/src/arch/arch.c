@@ -26,7 +26,6 @@ void KeArchInit() {
     printf("OK: Physical MM Initialized.\n");
     MmVirtInit();
     printf("OK: Virtual MM Initialized.\n");
-    MmAllocInit();
     printf("OK: MM Initialized.\n");
 #if defined (__x86_64__)
     KeAcpiInit();

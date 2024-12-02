@@ -83,19 +83,35 @@ void _putchar(char Char) {
 
 uint64_t HhdmOffset;
 
+bool Blocked = false;
+
 void TaskA() {
-    for (;;)
+    while (!Blocked)
         E9Write("Task A!\n");
+    for (int i = 0; i < 20; i++) {
+        E9Write("Task A!\n");
+    }
+    while (1) {
+    }
 }
 
 void TaskB() {
-    for (;;)
+    while (!Blocked)
         E9Write("Task B!\n");
+    for (int i = 0; i < 20; i++) {
+        E9Write("Task B!\n");
+    }
+    while (1) {
+    }
 }
 
 void TaskC() {
-    for (;;)
+    for (int i = 0; i < 100000; i++)
         E9Write("Task C!\n");
+    Blocked = true;
+    KxBlockThread();
+    while (1) {
+    }
 }
 
 // The following will be our kernel's entry point.
@@ -127,8 +143,8 @@ void KeMain(void) {
     Thread *pThread = PsCreateThread(pProc, TaskA, THREAD_LOW, 1);
 
     Proc *pProcB = PsCreateProc(1);
-    Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_HIGH, 2);
-    Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_LOW, 2);
+    Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_LOW, 2);
+    Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_HIGH, 2);
 
     KxSchedInit();
 

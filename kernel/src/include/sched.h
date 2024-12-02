@@ -41,3 +41,5 @@ typedef struct {
 void KxSchedInit();
 Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum);
 Proc *PsCreateProc();
+Thread *PsGetThread();
+void KxBlockThread();

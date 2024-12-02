@@ -89,13 +89,13 @@ Proc *PsCreateProc() {
 void KxSchedule(Context *pCtx) {
     CpuInfo *pCpu = KeSmpGetCpu();
     Thread *pThread = pCpu->pCurrentThread;
-    if (pThread && pThread->Flags & THREAD_RUNNING) {
+    if (pThread) {
         memcpy(&pThread->Ctx, pCtx, sizeof(Context));
         pThread->Flags &= ~THREAD_RUNNING;
     }
     // Find highest queue to run
     ThreadQueue *pQueue = pCpu->pThreadQueue;
-    while (!pQueue->pThreads && !pQueue->HasRunnableThread) {
+    while (!pQueue->pThreads || !pQueue->HasRunnableThread) {
         if (pQueue->pNext == NULL) {
             KeLocalApicEoi();
             KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
@@ -114,4 +114,39 @@ void KxSchedule(Context *pCtx) {
     MmSwitchPageMap(pThread->pPageMap);
     KeLocalApicEoi();
     KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * pThread->Priority);
+}
+
+Thread *PsGetThread() {
+    return KeSmpGetCpu()->pCurrentThread;
+}
+
+void KxBlockThread() {
+    Thread *pThread = PsGetThread();
+    pThread->Flags &= ~(THREAD_RUNNING | THREAD_READY);
+    pThread->Flags |= THREAD_BLOCKED;
+    CpuInfo *pCpu = KeSmpGetCpuByNum(pThread->CpuNum);
+    ThreadQueue *pQueue = NULL;
+    switch (pThread->Priority) {
+        case THREAD_HIGH:
+            pQueue = pCpu->pThreadQueue;
+            break;
+        case THREAD_MED:
+            pQueue = pCpu->pThreadQueue->pNext;
+            break;
+        case THREAD_LOW:
+        default:
+            pQueue = pCpu->pThreadQueue->pNext->pNext;
+            break;
+    }
+    bool FoundRunnable = false;
+    Thread *pQueueThread = pQueue->pThreads;
+    while (pQueueThread != pQueue->pThreads) {
+        if (pQueueThread->Flags & THREAD_READY || pQueueThread->Flags & THREAD_RUNNING) {
+            FoundRunnable = true;
+            break;
+        }
+        pQueueThread = pQueueThread->pNext;
+    }
+    pQueue->HasRunnableThread = FoundRunnable;
+    return;
 }

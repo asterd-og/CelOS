@@ -124,11 +124,11 @@ void KeMain(void) {
     printf("Kernel Initialised.\n");
 
     Proc *pProc = PsCreateProc();
-    Thread *pThread = PsCreateThread(pProc, TaskA, THREAD_LOW);
+    Thread *pThread = PsCreateThread(pProc, TaskA, THREAD_LOW, 1);
 
-    Proc *pProcB = PsCreateProcOnCpu(1);
-    Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_LOW);
-    Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_HIGH);
+    Proc *pProcB = PsCreateProc(1);
+    Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_HIGH, 2);
+    Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_LOW, 2);
 
     KxSchedInit();
 

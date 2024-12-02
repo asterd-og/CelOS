@@ -15,6 +15,28 @@ CpuInfo *g_pSmpCpuList;
 SpinLock g_SmpLock;
 uint64_t g_SmpStartedCount = 0;
 
+void KeSmpCreateThreadQueue(CpuInfo *pCpu) {
+    ThreadQueue *pThreadHighQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
+    ThreadQueue *pThreadMedQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
+    ThreadQueue *pThreadLowQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
+    pThreadHighQueue->pThreads = NULL;
+    pThreadHighQueue->Priority = THREAD_HIGH;
+    pThreadHighQueue->pNext = pThreadMedQueue;
+    pThreadHighQueue->HasRunnableThread = false;
+
+    pThreadMedQueue->pThreads = NULL;
+    pThreadMedQueue->Priority = THREAD_MED;
+    pThreadMedQueue->pNext = pThreadLowQueue;
+    pThreadMedQueue->HasRunnableThread = false;
+
+    pThreadLowQueue->pThreads = NULL;
+    pThreadLowQueue->Priority = THREAD_LOW;
+    pThreadLowQueue->pNext = NULL;
+    pThreadLowQueue->HasRunnableThread = false;
+
+    pCpu->pThreadQueue = pThreadHighQueue;
+}
+
 void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
     SpinLockAcquire(&g_SmpLock);
     CpuInfo *pCpu = (CpuInfo*)pSmpInfo->extra_argument;
@@ -24,6 +46,7 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
     KeArchSmpCpuInit(pSmpInfo, &pCpu->ArchInfo);
     pCpu->CpuNum = KeArchSmpGetCpuNum();
     pCpu->IPL = 0xf;
+    KeSmpCreateThreadQueue(pCpu);
 
     printf("Cpu %ld Initialised.\n", pSmpInfo->lapic_id);
     g_SmpStartedCount++;
@@ -42,6 +65,7 @@ void KeSmpInit() {
     KeArchSmpInit(&pBspCpu->ArchInfo);
     pBspCpu->pCurrentPageMap = g_pKernelPageMap;
     pBspCpu->IPL = 0xf;
+    KeSmpCreateThreadQueue(pBspCpu);
 
     for (uint64_t i = 0; i < pSmpResponse->cpu_count; i++) {
         if (pSmpResponse->cpus[i]->lapic_id != BspID) {

@@ -9,6 +9,13 @@
 #endif
 #include <sched.h>
 
+typedef struct ThreadQueue {
+    bool HasRunnableThread;
+    uint64_t Priority;
+    struct Thread *pThreads;
+    struct ThreadQueue *pNext;
+} ThreadQueue;
+
 typedef struct {
     ArchCpuInfo ArchInfo;
     PageMap *pCurrentPageMap;
@@ -19,8 +26,8 @@ typedef struct {
     uint8_t QueuedIrqIdx;
     bool RunningIrq;
 
-    Proc *pProcList;
-    Proc *pCurrentProc;
+    ThreadQueue *pThreadQueue;
+
     Thread *pCurrentThread;
 } CpuInfo;
 

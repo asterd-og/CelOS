@@ -9,6 +9,7 @@
 #endif
 #include <interrupt.h>
 #include <printf.h>
+#include <assert.h>
 
 #define QUANTUM 5
 
@@ -25,7 +26,7 @@ void KxSchedInit() {
     #endif
 }
 
-Thread *PsCreateThread(Proc *pProc, void *pEntry, uint64_t Priority) {
+Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum) {
     Thread *pThread = (Thread*)MmAlloc(sizeof(Thread));
     pThread->Stack = (uint64_t)HIGHER_HALF(MmPhysAllocatePage());
     CTX_IP(pThread->Ctx) = (uint64_t)pEntry;
@@ -36,6 +37,8 @@ Thread *PsCreateThread(Proc *pProc, void *pEntry, uint64_t Priority) {
     pThread->pPageMap = pProc->pPageMap;
     pThread->Priority = Priority;
     pThread->Flags = THREAD_READY;
+    pThread->pProc = pProc;
+    pThread->CpuNum = CpuNum;
     if (!pProc->pThreads) {
         pProc->pThreads = pThread;
         pThread->pPrev = pThread;
@@ -46,76 +49,69 @@ Thread *PsCreateThread(Proc *pProc, void *pEntry, uint64_t Priority) {
         pProc->pThreads->pPrev->pNext = pThread;
         pProc->pThreads->pPrev = pThread;
     }
+    // Put it in the appropriate queue
+    CpuInfo *pCpu = KeSmpGetCpuByNum(CpuNum);
+    ThreadQueue *pQueue = NULL;
+    switch (Priority) {
+        case THREAD_HIGH:
+            pQueue = pCpu->pThreadQueue;
+            break;
+        case THREAD_MED:
+            pQueue = pCpu->pThreadQueue->pNext;
+            break;
+        case THREAD_LOW:
+        default:
+            pQueue = pCpu->pThreadQueue->pNext->pNext;
+            break;
+    }
+    pQueue->HasRunnableThread = true;
+    if (!pQueue->pThreads) {
+        pThread->pNext = pThread;
+        pThread->pPrev = pThread;
+        pQueue->pThreads = pThread;
+        return pThread;
+    }
+    pThread->pNext = pQueue->pThreads;
+    pThread->pPrev = pQueue->pThreads->pPrev;
+    pQueue->pThreads->pPrev->pNext = pThread;
+    pQueue->pThreads->pPrev = pThread;
     return pThread;
 }
 
-Proc *PsCreateProcOnCpu(uint32_t CpuNum) {
+Proc *PsCreateProc() {
     Proc *pProc = (Proc*)MmAlloc(sizeof(Proc));
     pProc->pPageMap = MmNewPageMap();
     pProc->ID = g_PID++;
-    CpuInfo *pCpu = KeSmpGetCpuByNum(CpuNum);
-    if (!pCpu->pProcList) {
-        pCpu->pProcList = pProc;
-        pProc->pNext = pProc;
-        pProc->pPrev = pProc;
-        pCpu->pCurrentProc = pProc;
-    } else {
-        pProc->pNext = pCpu->pProcList;
-        pProc->pPrev = pCpu->pProcList->pPrev;
-        pCpu->pProcList->pPrev->pNext = pProc;
-        pCpu->pProcList->pPrev = pProc;
-    }
     pProc->pThreads = NULL;
-    return pProc;
-}
-
-Proc *PsCreateProc() {
-    Proc *pProc = PsCreateProcOnCpu(KeSmpGetCpu()->CpuNum);
     return pProc;
 }
 
 void KxSchedule(Context *pCtx) {
     CpuInfo *pCpu = KeSmpGetCpu();
-    if (!pCpu->pCurrentProc) {
-        KeLocalApicEoi();
-        KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
-        return;
-    }
-    Proc *pProc = pCpu->pCurrentProc;
     Thread *pThread = pCpu->pCurrentThread;
-    if (!pThread) {
-        while (!pProc->pThreads) {
-            pProc = pProc->pNext;
-            if (pProc == pCpu->pCurrentProc) {
-                KeLocalApicEoi();
-                KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
-                return;
-            }
-        }
-        pThread = pProc->pThreads;
-    }
-    if (pThread->Flags & THREAD_RUNNING) {
+    if (pThread && pThread->Flags & THREAD_RUNNING) {
         memcpy(&pThread->Ctx, pCtx, sizeof(Context));
         pThread->Flags &= ~THREAD_RUNNING;
-        pThread = pThread->pNext;
-        if (pThread == pProc->pThreads) {
-            pProc = pProc->pNext;
-            while (!pProc->pThreads) {
-                pProc = pProc->pNext;
-                if (pProc == pCpu->pCurrentProc) {
-                    KeLocalApicEoi();
-                    KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
-                    return;
-                }
-            }
-            pThread = pProc->pThreads;
-        }
     }
-    pThread->Flags |= THREAD_RUNNING;
+    // Find highest queue to run
+    ThreadQueue *pQueue = pCpu->pThreadQueue;
+    while (!pQueue->pThreads && !pQueue->HasRunnableThread) {
+        if (pQueue->pNext == NULL) {
+            KeLocalApicEoi();
+            KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
+            return;
+        }
+        pQueue = pQueue->pNext;
+    }
+    pThread = pQueue->pThreads;
+    while (!(pThread->Flags & THREAD_READY)) {
+        pThread = pThread->pNext;
+        ASSERT(pThread != pQueue->pThreads);
+    }
     pCpu->pCurrentThread = pThread;
-    pCpu->pCurrentProc = pProc;
+    pThread->Flags |= THREAD_RUNNING;
     memcpy(pCtx, &pThread->Ctx, sizeof(Context));
+    MmSwitchPageMap(pThread->pPageMap);
     KeLocalApicEoi();
     KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * pThread->Priority);
-    MmSwitchPageMap(pThread->pPageMap);
 }

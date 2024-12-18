@@ -19,9 +19,9 @@ typedef struct Block {
 
 typedef struct Region {
     struct Region *pNext;
+    uint8_t *pDataArea;
     size_t FreeSize;
     size_t TotalSize;
-    uint8_t *pDataArea;
 } Region;
 
 typedef struct {

@@ -21,3 +21,5 @@ void KxInstallIrq(uint8_t Irq, void *pHandler, uint8_t IPL);
 void KxUninstallIrq(uint8_t Irq);
 void KxSendInt(uint32_t CpuNum, uint8_t Irq);
 void KxSendIntAll(uint8_t Irq);
+void KxEndOfInt();
+void KxTimeInt(uint8_t Irq, uint64_t Ms);

@@ -135,7 +135,7 @@ PageMap *MmNewPageMap() {
     pPageMap->pVirtMemHead->pNext = pPageMap->pVirtMemHead;
     pPageMap->pVirtMemHead->pPrev = pPageMap->pVirtMemHead;
 
-    VirtMemRegion *pMemRegion = MmNewRegion(0, 1, MM_READ | MM_WRITE);
+    VirtMemRegion *pMemRegion = MmNewRegion(0x1000, 1, MM_READ | MM_WRITE);
     MmAppendRegion(pPageMap, pMemRegion);
 
     for (uint64_t i = 256; i < 512; i++)

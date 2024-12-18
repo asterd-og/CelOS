@@ -2,9 +2,6 @@
 #include <pmm.h>
 #include <smp.h>
 #include <string.h>
-#if defined (__x86_64__)
-#include <x86/apic.h>
-#endif
 #include <interrupt.h>
 #include <printf.h>
 #include <assert.h>
@@ -103,8 +100,8 @@ void KxSchedule(Context *pCtx) {
     ThreadQueue *pQueue = pCpu->pThreadQueue;
     while (!pQueue->pThreads || !pQueue->HasRunnableThread) {
         if (pQueue->pNext == NULL) {
-            KeLocalApicEoi();
-            KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * 5);
+            KxEndOfInt();
+            KxTimeInt(g_SchedVector, QUANTUM * 5);
             return;
         }
         pQueue = pQueue->pNext;
@@ -116,11 +113,13 @@ void KxSchedule(Context *pCtx) {
     }
     pCpu->pCurrentThread = pThread;
     pThread->Flags |= THREAD_RUNNING;
+
     memcpy(pCtx, &pThread->Ctx, sizeof(Context));
     MmSwitchPageMap(pThread->pPageMap);
     KeSmpSwitchAllocator(((Proc*)(pThread->pProc))->pAllocator);
-    KeLocalApicEoi();
-    KeLocalApicOneShot(32 + g_SchedVector, QUANTUM * pThread->Priority);
+
+    KxEndOfInt();
+    KxTimeInt(g_SchedVector, QUANTUM * pThread->Priority);
 }
 
 Thread *PsGetThread() {

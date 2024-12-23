@@ -1,9 +1,6 @@
 /*
 
 Memory allocator written by: Astrido
-I wrote this for the EchoCore LibC, which follows unix-like style
-but now I had to port it for CelOS which has NT-like style.
-Yes. I know the style is fucked.
 
 */
 
@@ -17,8 +14,6 @@ Yes. I know the style is fucked.
 
 #define FREE_BIT 1
 #define BLK_GET_SIZE(Block) (Block->Size >> 1)
-
-#define PAGE_SIZE 4096
 
 Region *MmCreateRegion(AllocatorDescriptor *pAllocator, size_t AreaSize) {
     Region *pRegion = (Region*)MmVirtAllocatePages(pAllocator->pPageMap, 1, MM_READ | MM_WRITE);
@@ -105,7 +100,7 @@ Block *MmMerge(Block *pBlock, Region *pRegion) {
 
 void MmFree(void *pPtr) {
     Block *pBlock = (Block*)((uint8_t*)pPtr - sizeof(Block));
-    Region *pRegion = (Block*)pBlock->pRegion;
+    Region *pRegion = (Region*)pBlock->pRegion;
     // Find and merge nearby blocks.
     while (pBlock->pNext && pBlock->pNext->Size & FREE_BIT)
         MmMerge(pBlock, pRegion);

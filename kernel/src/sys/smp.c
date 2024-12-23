@@ -4,6 +4,7 @@
 #include <spinlock.h>
 #include <printf.h>
 #include <pmm.h>
+#include <string.h>
 
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_smp_request SmpRequest = {

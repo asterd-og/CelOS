@@ -10,10 +10,11 @@
 IrqDescriptor g_IrqTbl[224];
 
 int KxHandleIrq(uint8_t Irq, Context *pCtx) {
-    /*if (!g_IrqTbl[Irq].Present)
+    if (!g_IrqTbl[Irq].Present)
         return INT_UNCAUGHT;
     CpuInfo *pCpu = KeSmpGetCpu();
-    if (pCpu->RunningIrq || pCpu->IPL < g_IrqTbl[Irq].IPL) {
+    if (pCpu->RunningIrq && pCpu->IPL > g_IrqTbl[Irq].IPL) {
+        // running IRQ and there's an IPL
         // Enqueue this IRQ since it has an IPL higher than the current one, or another IRQ is running already.
         if (pCpu->QueuedIrqIdx == 255) {
             PANIC("Too many waiting IRQs.");
@@ -23,18 +24,33 @@ int KxHandleIrq(uint8_t Irq, Context *pCtx) {
         pCpu->QueuedIrqs[pCpu->QueuedIrqIdx++] = Irq;
         return INT_QUEUED;
     }
-    uint8_t OldIPL = pCpu->IPL;
     pCpu->RunningIrq = true;
     pCpu->IPL = g_IrqTbl[Irq].IPL;
     g_IrqTbl[Irq].pHandler(pCtx);
-    pCpu->IPL = OldIPL;
     pCpu->RunningIrq = false;
-    for (uint8_t i = pCpu->QueuedIrqIdx - 1; i > 0; i--) {
-        Irq = pCpu->QueuedIrqs[i];
-        pCpu->IPL = g_IrqTbl[Irq].IPL;
-        KxSendInt(pCpu->CpuNum, Irq); // TODO: Test this
-    }*/
-    g_IrqTbl[Irq].pHandler(pCtx);
+    if (pCpu->QueuedIrqIdx > 0) {
+        // Find next highest priority interrupt to run
+        uint8_t IPL = 0;
+        uint8_t HighestIrq = 0;
+        IrqDescriptor *IrqDesc = 0;
+        for (uint8_t i = 0; i < pCpu->QueuedIrqIdx; i++) {
+            if (pCpu->QueuedIrqs[i] == 0xff) {
+                if (i == pCpu->QueuedIrqIdx - 1) {
+                    pCpu->QueuedIrqIdx--;
+                    break;
+                }
+                continue; // IRQ 255 is not possible (only 224 entries on our array)
+            }
+            IrqDesc = &g_IrqTbl[pCpu->QueuedIrqs[i]];
+            if (IrqDesc->IPL > IPL) {
+                IPL = IrqDesc->IPL;
+                HighestIrq = i;
+            }
+        }
+        Irq = pCpu->QueuedIrqs[HighestIrq];
+        pCpu->QueuedIrqs[HighestIrq] = 0xff;
+        KxSendInt(pCpu->CpuNum, Irq);
+    }
     return INT_OK;
 }
 

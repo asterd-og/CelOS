@@ -110,7 +110,7 @@ void MmVirtInit() {
     for (uint64_t Data = DataStart; Data < DataEnd; Data += PAGE_SIZE)
         MmVirtMap(g_pKernelPageMap, Data, Data - KernelVirtualAddress + KernelPhysicalAddress, MM_READ | MM_WRITE | MM_NX);
 
-    VirtMemRegion *pMemRegion = MmNewRegion(HIGHER_HALF(0) + 0x100000000000, 1, MM_READ | MM_WRITE);
+    VirtMemRegion *pMemRegion = MmNewRegion((uint64_t)(HIGHER_HALF(0) + 0x100000000000), 1, MM_READ | MM_WRITE);
     MmAppendRegion(g_pKernelPageMap, pMemRegion);
 
     MmSwitchPageMap(g_pKernelPageMap);

@@ -1,5 +1,5 @@
-[global MmInvalidatePage]
+[global MmArchInvalidatePage]
 
-MmInvalidatePage:
+MmArchInvalidatePage:
     invlpg [rdi]
     ret

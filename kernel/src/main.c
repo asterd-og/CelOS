@@ -83,34 +83,15 @@ void _putchar(char Char) {
 
 uint64_t HhdmOffset;
 
-bool Blocked = false;
-
-void TaskA() {
-    while (!Blocked)
-        E9Write("Task A!\n");
-    for (int i = 0; i < 20; i++) {
-        E9Write("Task A!\n");
-    }
+void TaskTest() {
     while (1) {
+        printf("A");
     }
 }
 
-void TaskB() {
-    while (!Blocked)
-        E9Write("Task B!\n");
-    for (int i = 0; i < 20; i++) {
-        E9Write("Task B!\n");
-    }
+void TaskTest2() {
     while (1) {
-    }
-}
-
-void TaskC() {
-    for (int i = 0; i < 100000; i++)
-        E9Write("Task C!\n");
-    Blocked = true;
-    KxBlockThread();
-    while (1) {
+        E9Write("B");
     }
 }
 
@@ -132,19 +113,19 @@ void KeMain(void) {
     HhdmOffset = HhdmRequest.response->offset;
 
     struct limine_framebuffer *pFramebuffer = FramebufferRequest.response->framebuffers[0];
-    pTermCtrl = TeNew(pFramebuffer->address, pFramebuffer->width, pFramebuffer->height, pFramebuffer->pitch, 0xff1b68ba, 0xffffffff, 0xfff39b00);
+    pTermCtrl = TeNew(pFramebuffer->address,
+                      pFramebuffer->width, pFramebuffer->height,
+                      pFramebuffer->pitch,
+                      0xff1b68ba,
+                      0xffffffff, 0xfff39b00);
 
     KeArchInit();
     printf("All CPUs initialised.\n");
 
     printf("Kernel Initialised.\n");
 
-    Proc *pProc = PsCreateProc();
-    Thread *pThread = PsCreateThread(pProc, TaskA, THREAD_LOW, 1);
-
-    Proc *pProcB = PsCreateProc(1);
-    Thread *pThreadB = PsCreateThread(pProcB, TaskB, THREAD_LOW, 2);
-    Thread *pThreadC = PsCreateThread(pProcB, TaskC, THREAD_HIGH, 2);
+    Task *pTask = KxCreateTask(TaskTest, TASK_HIGH, 1);
+    Task *pTask2 = KxCreateTask(TaskTest2, TASK_HIGH, 1);
 
     KxSchedInit();
 

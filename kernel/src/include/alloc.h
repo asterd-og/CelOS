@@ -30,7 +30,9 @@ typedef struct {
 } AllocatorDescriptor;
 
 AllocatorDescriptor *MmAllocInit();
-void *MmAlloc(size_t size);
-void MmFree(void *ptr);
+void *MmAlloc(size_t Size);
+void MmFree(void *pPtr);
+void *MmKAlloc(size_t Size);
+void MmKFree(void *pPtr);
 void MmAllocPrint(AllocatorDescriptor *pAllocator);
 void MmAllocDestroy(AllocatorDescriptor *pAllocator);

@@ -5,8 +5,8 @@ GdtTable g_GdtTable = {
         0x0000000000000000,
         0x00af9b000000ffff, // 0x08 64 bit cs (code)
         0x00af93000000ffff, // 0x10 64 bit ss (data)
-        0x00affb000000ffff, // 0x20 user mode cs (code)
-        0x00aff3000000ffff, // 0x18 user mode ss (data)
+        0x00affb000000ffff, // 0x18 user mode cs (code)
+        0x00aff3000000ffff, // 0x20 user mode ss (data)
     }
 };
 

@@ -9,13 +9,15 @@
 #include <x86/smp.h>
 #endif
 #include <sched.h>
+#include <list.h>
 
-typedef struct ThreadQueue {
-    bool HasRunnableThread;
+typedef struct TaskQueue {
+    bool HasRunnableTask;
     uint64_t Priority;
-    struct Thread *pThreads;
-    struct ThreadQueue *pNext;
-} ThreadQueue;
+    List *pTasks;
+    ListItem *pIterator;
+    struct TaskQueue *pNext;
+} TaskQueue;
 
 typedef struct {
     ArchCpuInfo ArchInfo;
@@ -28,9 +30,8 @@ typedef struct {
     uint8_t QueuedIrqIdx;
     bool RunningIrq;
 
-    ThreadQueue *pThreadQueue;
-
-    Thread *pCurrentThread;
+    TaskQueue *pTaskQueue;
+    Task *pCurrentTask;
 } CpuInfo;
 
 extern bool g_SmpStarted;

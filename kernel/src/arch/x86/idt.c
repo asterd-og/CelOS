@@ -1,9 +1,13 @@
 #include <x86/idt.h>
 #include <x86/apic.h>
 #include <x86/ports.h>
+#include <x86/e9.h>
 #include <context.h>
 #include <printf.h>
 #include <interrupt.h>
+#include <vmm.h>
+#include <pmm.h>
+#include <sched.h>
 
 const char *g_pszMessages[32] = {
     "Division by zero",
@@ -73,9 +77,18 @@ void KeSetIdtEntry(uint16_t Vector, void *Isr, uint8_t Flags) {
 }
 
 void KeHandleIsr(Context *pContext) {
-    printf("ISR Caught: %s.\n", g_pszMessages[pContext->IntNo]);
+    KxBlockSched();
+    printf("ISR Caught: %s @ 0x%lx.\n", g_pszMessages[pContext->IntNo], pContext->RIP);
+    E9Write("ISR Caught: %s @ 0x%lx.\n", g_pszMessages[pContext->IntNo], pContext->RIP);
+    if (pContext->IntNo == 14) {
+        __asm__ volatile ("cli");
+        uint64_t CR2 = 0;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(CR2) :);
+        //CR2 = ALIGN_DOWN(CR2, PAGE_SIZE);
+        MmPageFault(CR2);
+    }
     for (;;) {
-        __asm__ volatile ("hlt;cli");
+        __asm__ volatile ("hlt\ncli");
     }
 }
 

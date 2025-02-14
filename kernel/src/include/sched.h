@@ -2,44 +2,42 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <context.h>
 #include <alloc.h>
 #include <vmm.h>
+#include <list.h>
 
-#define THREAD_READY 1
-#define THREAD_RUNNING 2
-#define THREAD_SLEEPING 4
-#define THREAD_BLOCKED 8
+#define TASK_READY 1
+#define TASK_RUNNING 2
+#define TASK_SLEEPING 4
+#define TASK_BLOCKED 8
+#define TASK_ZOMBIE 16
 
-enum ThreadPriority {
-    THREAD_LOW = 1,
-    THREAD_MED = 2,
-    THREAD_HIGH = 3
+enum TaskPriority {
+    TASK_LOW = 1,
+    TASK_MED = 2,
+    TASK_HIGH = 3
 };
 
-typedef struct Thread {
+typedef struct Task {
+    uint64_t ID;
     Context Ctx;
     PageMap *pPageMap;
     uint64_t Stack;
     uint64_t Priority;
     uint64_t Flags;
     uint32_t CpuNum;
-    struct Thread *pNext;
-    struct Thread *pPrev;
-    void *pProc;
-} Thread;
+} Task;
 
-typedef struct {
-    PageMap *pPageMap;
-    int ID;
-    AllocatorDescriptor *pAllocator;
-    struct Proc *pNext;
-    struct Proc *pPrev;
-    Thread *pThreads;
-} Proc;
+extern bool g_SchedInitialised;
 
 void KxSchedInit();
-Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum);
-Proc *PsCreateProc();
-Thread *PsGetThread();
-void KxBlockThread();
+
+Task *KxCreateTask(void *pEntry, uint64_t Priority, uint32_t CpuNum);
+
+void KxKillTask();
+void KxBlockTask();
+
+void KxBlockSched();
+void KxUnblockSched();

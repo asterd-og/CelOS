@@ -14,7 +14,7 @@ void KeArchSmpCpuInit(struct limine_smp_info *pSmpInfo, ArchCpuInfo *pCpuInfo) {
     KeLocalApicInit();
     __asm__ volatile ("sti");
     pCpuInfo->LocalApicTicks = KeLocalApicInitTimer();
-    pCpuInfo->LocalApicID = pSmpInfo->lapic_id;
+    pCpuInfo->LocalApicID = KeLocalApicGetID();
 }
 
 void KeArchSmpInit(ArchCpuInfo *pCpuInfo) {

@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 void MmArchVirtInit();
 void MmArchSwitchPageMap(uint64_t *pPageMap);

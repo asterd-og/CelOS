@@ -15,7 +15,6 @@ int KxHandleIrq(uint8_t Irq, Context *pCtx) {
     CpuInfo *pCpu = KeSmpGetCpu();
     if (pCpu->RunningIrq && pCpu->IPL > g_IrqTbl[Irq].IPL) {
         // running IRQ and there's an IPL
-        // Enqueue this IRQ since it has an IPL higher than the current one, or another IRQ is running already.
         if (pCpu->QueuedIrqIdx == 255) {
             PANIC("Too many waiting IRQs.");
             return INT_UNCAUGHT;
@@ -100,5 +99,11 @@ void KxEndOfInt() {
 void KxTimeInt(uint8_t Irq, uint64_t Ms) {
     #if defined (__x86_64__)
     KeLocalApicOneShot(Irq + 32, Ms);
+    #endif
+}
+
+void KxPauseTimer() {
+    #if defined (__x86_64__)
+    KeLocalApicStopTimer();
     #endif
 }

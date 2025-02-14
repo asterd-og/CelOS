@@ -109,6 +109,21 @@ void MmFree(void *pPtr) {
     pBlock->Size |= FREE_BIT;
 }
 
+void *MmKAlloc(size_t Size) {
+    if (Size % 0x10) {
+        // Align size to 16 so all pointers stay aligned.
+        Size -= (Size % 0x10);
+        Size += 0x10;
+    }
+    return MmInternalAlloc(g_pKernelAllocator, Size);
+}
+
+void MmKFree(void *pPtr) {
+    PageMap *pOldPageMap = MmSwitchPageMap(g_pKernelPageMap);
+    MmFree(pPtr);
+    MmSwitchPageMap(pOldPageMap);
+}
+
 void MmDestroy(AllocatorDescriptor *pAllocator) {
     Region *pNextRegion = NULL;
     for (Region *pRegion = pAllocator->pMainRegion; pRegion != NULL; pRegion = pNextRegion) {

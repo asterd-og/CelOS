@@ -24,7 +24,7 @@ ifeq ($(filter $(KARCH),aarch64 loongarch64 riscv64 x86_64),)
 endif
 
 # User controllable C compiler command.
-$(call USER_VARIABLE,KCC,cc)
+$(call USER_VARIABLE,KCC,gcc)
 
 # User controllable linker command.
 $(call USER_VARIABLE,KLD,ld)

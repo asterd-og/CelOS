@@ -87,13 +87,16 @@ void MmVirtInit() {
     uint64_t DataStart = ALIGN_DOWN((uint64_t)DataStartLD, PAGE_SIZE);
     uint64_t DataEnd = ALIGN_UP((uint64_t)DataEndLD, PAGE_SIZE);
 
-    for (uint64_t gb4 = 0x1000; gb4 < 0x100000000; gb4 += PAGE_SIZE)
+    for (uint64_t gb4 = 0; gb4 < 0x100000000; gb4 += PAGE_SIZE) {
+        MmVirtMap(g_pKernelPageMap, (uint64_t)gb4, gb4, MM_READ | MM_WRITE);
         MmVirtMap(g_pKernelPageMap, (uint64_t)HIGHER_HALF(gb4), gb4, MM_READ | MM_WRITE);
+    }
 
     struct limine_memmap_entry *pMmapEntry;
     for (uint64_t i = 0; i < g_pMmapResponse->entry_count; i++) {
         pMmapEntry = g_pMmapResponse->entries[i];
         for (uint64_t j = 0; j < pMmapEntry->length; j += PAGE_SIZE) {
+            MmVirtMap(g_pKernelPageMap, pMmapEntry->base + j, pMmapEntry->base + j, MM_READ | MM_WRITE | MM_NX);
             MmVirtMap(g_pKernelPageMap, (uint64_t)HIGHER_HALF(pMmapEntry->base + j), pMmapEntry->base + j, MM_READ | MM_WRITE | MM_NX);
         }
     }
@@ -119,8 +122,9 @@ void MmVirtInit() {
 PageMap *MmSwitchPageMap(PageMap *pPageMap) {
     PageMap *pOldPageMap = MmGetPageMap();
     MmArchSwitchPageMap(pPageMap->pTopLevel);
-    if (g_SmpStarted)
+    if (g_SmpStarted) {
         KeSmpGetCpu()->pCurrentPageMap = pPageMap;
+    }
     return pOldPageMap;
 }
 
@@ -166,12 +170,12 @@ NotFound:
 }
 
 uint64_t MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags) {
-    if (VirtualAddress == 0) {
+    /*if (VirtualAddress == 0) {
         // Find new virtual address
         VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, 1);
         pRegion->Flags = Flags;
         VirtualAddress = pRegion->VirtualAddress;
-    }
+    }*/
     MmArchVirtMap(pPageMap->pTopLevel, VirtualAddress, PhysicalAddress, Flags);
     return VirtualAddress;
 }
@@ -220,4 +224,8 @@ PageMap *MmGetPageMap() {
     if (g_SmpStarted)
         return KeSmpGetCpu()->pCurrentPageMap;
     return g_pKernelPageMap;
+}
+
+void MmPageFault(uint64_t Address) {
+    printf("@ Address 0x%lx.\n", Address);
 }

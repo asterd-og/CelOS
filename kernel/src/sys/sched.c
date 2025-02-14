@@ -8,97 +8,76 @@
 
 #define QUANTUM 5
 
-uint64_t g_PID = 0;
+uint64_t g_ID = 0;
 uint8_t g_SchedVector = 0;
+
+bool g_SchedInitialised = false;
 
 void KxSchedule(Context *pCtx);
 
 void KxSchedInit() {
     g_SchedVector = KxGetFreeIrq();
     KxInstallIrq(g_SchedVector, KxSchedule, 1);
-    KxSendIntAll(g_SchedVector);
+    g_SchedInitialised = true;
+    KxSendInt(1, g_SchedVector);
+    ///KxSendIntAll(g_SchedVector);
 }
 
-Thread *PsCreateThread(Proc* pProc, void *pEntry, uint64_t Priority, uint32_t CpuNum) {
-    Thread *pThread = (Thread*)MmAlloc(sizeof(Thread));
-
-    AllocatorDescriptor *pOldAllocator = KeSmpSwitchAllocator(pProc->pAllocator);
-    PageMap *pOldPageMap = MmSwitchPageMap(pProc->pPageMap);
-    pThread->Stack = (uint64_t)MmAlloc(PAGE_SIZE * 3);
-    MmSwitchPageMap(pOldPageMap);
-    KeSmpSwitchAllocator(pOldAllocator);
-
-    CTX_IP(pThread->Ctx) = (uint64_t)pEntry;
-    CTX_STK(pThread->Ctx) = pThread->Stack + (PAGE_SIZE * 3);
-    CTX_SEG(pThread->Ctx);
-    CTX_FLAGS(pThread->Ctx);
-    pThread->pPageMap = pProc->pPageMap;
-    pThread->Priority = Priority;
-    pThread->Flags = THREAD_READY;
-    pThread->pProc = pProc;
-    pThread->CpuNum = CpuNum;
-    if (!pProc->pThreads) {
-        pProc->pThreads = pThread;
-        pThread->pPrev = pThread;
-        pThread->pNext = pThread;
-    } else {
-        pThread->pNext = pProc->pThreads;
-        pThread->pPrev = pProc->pThreads->pPrev;
-        pProc->pThreads->pPrev->pNext = pThread;
-        pProc->pThreads->pPrev = pThread;
-    }
-    // Put it in the appropriate queue
-    CpuInfo *pCpu = KeSmpGetCpuByNum(CpuNum);
-    ThreadQueue *pQueue = NULL;
+TaskQueue *KxGetQueueFromPriority(uint64_t Priority, CpuInfo *pCpu) {
+    TaskQueue *pQueue = NULL;
     switch (Priority) {
-        case THREAD_HIGH:
-            pQueue = pCpu->pThreadQueue;
+        case TASK_HIGH:
+            pQueue = pCpu->pTaskQueue;
             break;
-        case THREAD_MED:
-            pQueue = pCpu->pThreadQueue->pNext;
+        case TASK_MED:
+            pQueue = pCpu->pTaskQueue->pNext;
             break;
-        case THREAD_LOW:
+        case TASK_LOW:
         default:
-            pQueue = pCpu->pThreadQueue->pNext->pNext;
+            pQueue = pCpu->pTaskQueue->pNext->pNext;
             break;
     }
-    pQueue->HasRunnableThread = true;
-    if (!pQueue->pThreads) {
-        pThread->pNext = pThread;
-        pThread->pPrev = pThread;
-        pQueue->pThreads = pThread;
-        return pThread;
-    }
-    pThread->pNext = pQueue->pThreads;
-    pThread->pPrev = pQueue->pThreads->pPrev;
-    pQueue->pThreads->pPrev->pNext = pThread;
-    pQueue->pThreads->pPrev = pThread;
-    return pThread;
+    return pQueue;
 }
 
-Proc *PsCreateProc() {
-    Proc *pProc = (Proc*)MmAlloc(sizeof(Proc));
-    pProc->pPageMap = MmNewPageMap();
+Task *KxCreateTask(void *pEntry, uint64_t Priority, uint32_t CpuNum) {
+    // TODO: Check if CPU exists.
+    CpuInfo *pCpu = KeSmpGetCpuByNum(CpuNum);
 
-    PageMap *pOldPageMap = MmSwitchPageMap(pProc->pPageMap);
-    pProc->pAllocator = MmAllocInit();
-    MmSwitchPageMap(pOldPageMap);
+    Task *pTask = (Task*)MmAlloc(sizeof(Task));
+    pTask->ID = g_ID++;
+    pTask->pPageMap = MmNewPageMap();
 
-    pProc->ID = g_PID++;
-    pProc->pThreads = NULL;
-    return pProc;
+    pTask->Stack = MmVirtAllocatePages(g_pKernelPageMap, 3, MM_READ | MM_WRITE);
+
+    CTX_IP(pTask->Ctx) = (uint64_t)pEntry;
+    CTX_STK(pTask->Ctx) = pTask->Stack + (PAGE_SIZE * 3);
+    CTX_SEG(pTask->Ctx);
+    CTX_FLAGS(pTask->Ctx);
+
+    pTask->Flags = TASK_READY;
+
+    TaskQueue *pQueue = KxGetQueueFromPriority(Priority, pCpu);
+    pQueue->HasRunnableTask = true;
+    ListAppend(pQueue->pTasks, pTask);
+
+    pTask->Priority = Priority;
+
+    return pTask;
 }
 
 void KxSchedule(Context *pCtx) {
+    KxPauseTimer();
     CpuInfo *pCpu = KeSmpGetCpu();
-    Thread *pThread = pCpu->pCurrentThread;
-    if (pThread) {
-        memcpy(&pThread->Ctx, pCtx, sizeof(Context));
-        pThread->Flags &= ~THREAD_RUNNING;
+    Task *pTask = pCpu->pCurrentTask;
+    if (pTask) {
+        pTask->Ctx = *pCtx;
+        if (pTask->Flags == TASK_RUNNING)
+            pTask->Flags = TASK_READY;
     }
-    // Find highest queue to run
-    ThreadQueue *pQueue = pCpu->pThreadQueue;
-    while (!pQueue->pThreads || !pQueue->HasRunnableThread) {
+    // Find highest queue to run.
+    TaskQueue *pQueue = pCpu->pTaskQueue;
+    while (pQueue->pTasks->Count == 0 || !pQueue->HasRunnableTask) {
         if (pQueue->pNext == NULL) {
             KxEndOfInt();
             KxTimeInt(g_SchedVector, QUANTUM * 5);
@@ -106,53 +85,29 @@ void KxSchedule(Context *pCtx) {
         }
         pQueue = pQueue->pNext;
     }
-    pThread = pQueue->pThreads;
-    while (!(pThread->Flags & THREAD_READY)) {
-        pThread = pThread->pNext;
-        ASSERT(pThread != pQueue->pThreads);
-    }
-    pCpu->pCurrentThread = pThread;
-    pThread->Flags |= THREAD_RUNNING;
-
-    memcpy(pCtx, &pThread->Ctx, sizeof(Context));
-    MmSwitchPageMap(pThread->pPageMap);
-    KeSmpSwitchAllocator(((Proc*)(pThread->pProc))->pAllocator);
-
-    KxEndOfInt();
-    KxTimeInt(g_SchedVector, QUANTUM * pThread->Priority);
-}
-
-Thread *PsGetThread() {
-    return KeSmpGetCpu()->pCurrentThread;
-}
-
-void KxBlockThread() {
-    Thread *pThread = PsGetThread();
-    pThread->Flags &= ~(THREAD_RUNNING | THREAD_READY);
-    pThread->Flags |= THREAD_BLOCKED;
-    CpuInfo *pCpu = KeSmpGetCpuByNum(pThread->CpuNum);
-    ThreadQueue *pQueue = NULL;
-    switch (pThread->Priority) {
-        case THREAD_HIGH:
-            pQueue = pCpu->pThreadQueue;
-            break;
-        case THREAD_MED:
-            pQueue = pCpu->pThreadQueue->pNext;
-            break;
-        case THREAD_LOW:
-        default:
-            pQueue = pCpu->pThreadQueue->pNext->pNext;
-            break;
-    }
-    bool FoundRunnable = false;
-    Thread *pQueueThread = pQueue->pThreads;
-    while (pQueueThread != pQueue->pThreads) {
-        if (pQueueThread->Flags & THREAD_READY || pQueueThread->Flags & THREAD_RUNNING) {
-            FoundRunnable = true;
+    while (true) {
+        pQueue->pIterator = pQueue->pIterator->pNext;
+        if (pQueue->pIterator == pQueue->pTasks->pHead)
+           pQueue->pIterator = pQueue->pIterator->pNext;
+        pTask = (Task*)pQueue->pIterator->pData;
+        if (pTask->Flags == TASK_READY) {
             break;
         }
-        pQueueThread = pQueueThread->pNext;
     }
-    pQueue->HasRunnableThread = FoundRunnable;
-    return;
+    pCpu->pCurrentTask = pTask;
+    pTask->Flags = TASK_RUNNING;
+
+    *pCtx = pTask->Ctx;
+    MmSwitchPageMap(pTask->pPageMap);
+
+    KxEndOfInt();
+    KxTimeInt(g_SchedVector, QUANTUM * pTask->Priority);
+}
+
+void KxBlockSched() {
+    KxPauseTimer();
+}
+
+void KxUnblockSched() {
+    KxSendInt(KeSmpGetCpu()->CpuNum, g_SchedVector);
 }

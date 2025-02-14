@@ -12,6 +12,7 @@ void KeLocalApicEoi();
 void KeLocalApicIpi(uint32_t LocalApicId, uint32_t Data);
 void KeLocalApicIpiAll(uint32_t LocalApicId, uint8_t Vector);
 void KeLocalApicOneShot(uint32_t Vector, uint64_t Ms);
+void KeLocalApicStopTimer();
 uint64_t KeLocalApicInitTimer();
 uint32_t KeLocalApicGetID();
 

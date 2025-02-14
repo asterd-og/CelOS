@@ -74,6 +74,12 @@ void KeLocalApicOneShot(uint32_t Vector, uint64_t Ms) {
     KeLocalApicWrite(0x320, Vector);
 }
 
+void KeLocalApicStopTimer() {
+    // Mask timer interrupt
+    KeLocalApicWrite(0x380, 0);
+    KeLocalApicWrite(0x320, 0x00010000);
+}
+
 uint64_t KeLocalApicInitTimer() {
     KeLocalApicWrite(0x3e0, 0x3);        // Divisor = 16
     KeLocalApicWrite(0x380, 0xffffffff); // Init counter = -1

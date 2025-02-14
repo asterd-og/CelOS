@@ -23,3 +23,4 @@ void KxSendInt(uint32_t CpuNum, uint8_t Irq);
 void KxSendIntAll(uint8_t Irq);
 void KxEndOfInt();
 void KxTimeInt(uint8_t Irq, uint64_t Ms);
+void KxPauseTimer();

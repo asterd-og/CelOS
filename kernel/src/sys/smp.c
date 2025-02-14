@@ -20,26 +20,29 @@ AllocatorDescriptor *g_pKernelAllocator = NULL;
 
 bool g_SmpStarted = false;
 
-void KeSmpCreateThreadQueue(CpuInfo *pCpu) {
-    ThreadQueue *pThreadHighQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
-    ThreadQueue *pThreadMedQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
-    ThreadQueue *pThreadLowQueue = (ThreadQueue*)MmAlloc(sizeof(ThreadQueue));
-    pThreadHighQueue->pThreads = NULL;
-    pThreadHighQueue->Priority = THREAD_HIGH;
-    pThreadHighQueue->pNext = pThreadMedQueue;
-    pThreadHighQueue->HasRunnableThread = false;
+void KeSmpCreateTaskQueue(CpuInfo *pCpu) {
+    TaskQueue *pTaskHighQueue = (TaskQueue*)MmAlloc(sizeof(TaskQueue));
+    TaskQueue *pTaskMedQueue = (TaskQueue*)MmAlloc(sizeof(TaskQueue));
+    TaskQueue *pTaskLowQueue = (TaskQueue*)MmAlloc(sizeof(TaskQueue));
+    pTaskHighQueue->pTasks = ListCreate();
+    pTaskHighQueue->Priority = TASK_HIGH;
+    pTaskHighQueue->pNext = pTaskMedQueue;
+    pTaskHighQueue->HasRunnableTask = false;
+    pTaskHighQueue->pIterator = pTaskHighQueue->pTasks->pHead;
 
-    pThreadMedQueue->pThreads = NULL;
-    pThreadMedQueue->Priority = THREAD_MED;
-    pThreadMedQueue->pNext = pThreadLowQueue;
-    pThreadMedQueue->HasRunnableThread = false;
+    pTaskMedQueue->pTasks = ListCreate();
+    pTaskMedQueue->Priority = TASK_MED;
+    pTaskMedQueue->pNext = pTaskLowQueue;
+    pTaskMedQueue->HasRunnableTask = false;
+    pTaskMedQueue->pIterator = pTaskMedQueue->pTasks->pHead;
 
-    pThreadLowQueue->pThreads = NULL;
-    pThreadLowQueue->Priority = THREAD_LOW;
-    pThreadLowQueue->pNext = NULL;
-    pThreadLowQueue->HasRunnableThread = false;
+    pTaskLowQueue->pTasks = ListCreate();
+    pTaskLowQueue->Priority = TASK_LOW;
+    pTaskLowQueue->pNext = NULL;
+    pTaskLowQueue->HasRunnableTask = false;
+    pTaskLowQueue->pIterator = pTaskLowQueue->pTasks->pHead;
 
-    pCpu->pThreadQueue = pThreadHighQueue;
+    pCpu->pTaskQueue = pTaskHighQueue;
 }
 
 void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
@@ -47,12 +50,12 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
     CpuInfo *pCpu = (CpuInfo*)pSmpInfo->extra_argument;
     MmSwitchPageMap(g_pKernelPageMap);
     pCpu->pCurrentPageMap = g_pKernelPageMap;
+    pCpu->pCurrentAllocator = g_pKernelAllocator;
 
     KeArchSmpCpuInit(pSmpInfo, &pCpu->ArchInfo);
     pCpu->CpuNum = KeArchSmpGetCpuNum();
     pCpu->IPL = 0xf;
-    pCpu->pCurrentAllocator = g_pKernelAllocator;
-    KeSmpCreateThreadQueue(pCpu);
+    KeSmpCreateTaskQueue(pCpu);
 
     printf("Cpu %ld Initialised.\n", pSmpInfo->lapic_id);
     g_SmpStartedCount++;
@@ -76,7 +79,7 @@ void KeSmpInit() {
     g_pKernelAllocator = MmAllocInit();
     pBspCpu->pCurrentAllocator = g_pKernelAllocator;
 
-    KeSmpCreateThreadQueue(pBspCpu);
+    KeSmpCreateTaskQueue(pBspCpu);
 
     for (uint64_t i = 0; i < pSmpResponse->cpu_count; i++) {
         if (pSmpResponse->cpus[i]->lapic_id != BspID) {

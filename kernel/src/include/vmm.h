@@ -9,6 +9,7 @@
 #define MM_WRITE 2
 #define MM_USER 4
 #define MM_NX 1ul << 63
+#define MM_COW 1ul << 52
 #elif defined (__riscv)
 #define MM_READ 1
 #define MM_WRITE 2
@@ -41,3 +42,4 @@ uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress);
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags);
 void MmVirtFreePages(PageMap *pPageMap, void *pPtr);
 PageMap *MmGetPageMap();
+void MmPageFault(uint64_t Address);

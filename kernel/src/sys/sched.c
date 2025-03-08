@@ -19,8 +19,7 @@ void KxSchedInit() {
     g_SchedVector = KxGetFreeIrq();
     KxInstallIrq(g_SchedVector, KxSchedule, 1);
     g_SchedInitialised = true;
-    KxSendInt(1, g_SchedVector);
-    ///KxSendIntAll(g_SchedVector);
+    KxSendIntAll(g_SchedVector);
 }
 
 TaskQueue *KxGetQueueFromPriority(uint64_t Priority, CpuInfo *pCpu) {

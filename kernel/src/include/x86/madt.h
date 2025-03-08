@@ -18,12 +18,12 @@ typedef struct {
     uint32_t Flags;
 
     char aTable[];
-} MadtDescriptor;
+} __attribute__((packed)) MadtDescriptor;
 
 typedef struct {
     uint8_t Type;
     uint8_t Length;
-} MadtEntry;
+} __attribute__((packed)) MadtEntry;
 
 typedef struct {
     MadtEntry Entry;
@@ -31,7 +31,7 @@ typedef struct {
     uint8_t Reserved;
     uint32_t IoApicPhysAddress;
     uint32_t GsiBase;
-} MadtIoApic;
+} __attribute__((packed)) MadtIoApic;
 
 typedef struct {
     MadtEntry Entry;
@@ -39,27 +39,27 @@ typedef struct {
     uint8_t IrqSource;
     uint32_t Gsi;
     uint16_t Flags;
-} MadtIoApicIntSrcOvr;
+} __attribute__((packed)) MadtIoApicIntSrcOvr;
 
 typedef struct {
     MadtEntry Entry;
     uint8_t CpuID;
     uint16_t Flags;
     uint8_t LintNum;
-} MadtLocalApicNmi;
+} __attribute__((packed)) MadtLocalApicNmi;
 
 typedef struct {
     MadtEntry Entry;
     uint16_t Reserved;
     uint64_t LocalApicPhysAddr;
-} MadtLocalApicAddr;
+} __attribute__((packed)) MadtLocalApicAddr;
 
 typedef struct {
     MadtEntry Entry;
     uint32_t LocalX2ApicID;
     uint32_t Flags;
     uint32_t CpuID;
-} MadtLocalX2Apic;
+} __attribute__((packed)) MadtLocalX2Apic;
 
 extern uint32_t *g_pLocalApicPhysAddr;
 extern MadtIoApic *g_pIoApicList[128];

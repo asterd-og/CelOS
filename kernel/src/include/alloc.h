@@ -10,29 +10,28 @@ Memory allocator written by: Astrido
 #include <stddef.h>
 #include <vmm.h>
 
-typedef struct Block {
-    uint8_t *pRegion; // Address of the region it's located in
-    struct Block *pNext;
-    struct Block *pPrev;
-    size_t Size;
-} Block;
+#define HEAP_SIG 0xCACEFACEC001ABAB
 
-typedef struct Region {
-    struct Region *pNext;
+typedef struct HeapPool {
+    struct HeapPool *pNext;
     uint8_t *pDataArea;
     size_t FreeSize;
     size_t TotalSize;
-} Region;
+} HeapPool;
+
+typedef struct HeapBlock {
+    uint64_t Signature;
+    HeapPool *pPool; // Address of the region it's located in
+    struct HeapBlock *pNext;
+    struct HeapBlock *pPrev;
+    size_t Size;
+    uint8_t Status; // 0 for free 1 for used
+} HeapBlock;
 
 typedef struct {
-    PageMap *pPageMap;
-    Region *pMainRegion;
-} AllocatorDescriptor;
+    HeapPool *pMainPool;
+} HeapCtrl;
 
-AllocatorDescriptor *MmAllocInit();
+void MmAllocInit();
 void *MmAlloc(size_t Size);
 void MmFree(void *pPtr);
-void *MmKAlloc(size_t Size);
-void MmKFree(void *pPtr);
-void MmAllocPrint(AllocatorDescriptor *pAllocator);
-void MmAllocDestroy(AllocatorDescriptor *pAllocator);

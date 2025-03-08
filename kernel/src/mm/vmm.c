@@ -74,6 +74,7 @@ void MmVirtInit() {
     memset(g_pKernelPageMap->pVirtMemHead, 0, PAGE_SIZE);
     g_pKernelPageMap->pVirtMemHead->pNext = g_pKernelPageMap->pVirtMemHead;
     g_pKernelPageMap->pVirtMemHead->pPrev = g_pKernelPageMap->pVirtMemHead;
+    g_pKernelPageMap->pVirtMemHead->VirtualAddress = (uint64_t)(HIGHER_HALF(0x100000000000));
 
     uint64_t LimineRequestsStart = ALIGN_DOWN((uint64_t)LimineRequestsStartLD, PAGE_SIZE);
     uint64_t LimineRequestsEnd = ALIGN_UP((uint64_t)LimineRequestsEndLD, PAGE_SIZE);
@@ -87,7 +88,7 @@ void MmVirtInit() {
     uint64_t DataStart = ALIGN_DOWN((uint64_t)DataStartLD, PAGE_SIZE);
     uint64_t DataEnd = ALIGN_UP((uint64_t)DataEndLD, PAGE_SIZE);
 
-    for (uint64_t gb4 = 0; gb4 < 0x100000000; gb4 += PAGE_SIZE) {
+    for (uint64_t gb4 = 0x1000; gb4 < 0x100000000; gb4 += PAGE_SIZE) {
         MmVirtMap(g_pKernelPageMap, (uint64_t)gb4, gb4, MM_READ | MM_WRITE);
         MmVirtMap(g_pKernelPageMap, (uint64_t)HIGHER_HALF(gb4), gb4, MM_READ | MM_WRITE);
     }
@@ -113,9 +114,6 @@ void MmVirtInit() {
     for (uint64_t Data = DataStart; Data < DataEnd; Data += PAGE_SIZE)
         MmVirtMap(g_pKernelPageMap, Data, Data - KernelVirtualAddress + KernelPhysicalAddress, MM_READ | MM_WRITE | MM_NX);
 
-    VirtMemRegion *pMemRegion = MmNewRegion((uint64_t)(HIGHER_HALF(0) + 0x100000000000), 1, MM_READ | MM_WRITE);
-    MmAppendRegion(g_pKernelPageMap, pMemRegion);
-
     MmSwitchPageMap(g_pKernelPageMap);
 }
 
@@ -138,9 +136,7 @@ PageMap *MmNewPageMap() {
     memset(pPageMap->pVirtMemHead, 0, PAGE_SIZE);
     pPageMap->pVirtMemHead->pNext = pPageMap->pVirtMemHead;
     pPageMap->pVirtMemHead->pPrev = pPageMap->pVirtMemHead;
-
-    VirtMemRegion *pMemRegion = MmNewRegion(0x1000, 1, MM_READ | MM_WRITE);
-    MmAppendRegion(pPageMap, pMemRegion);
+    pPageMap->pVirtMemHead->VirtualAddress = 0x1000;
 
     for (uint64_t i = 256; i < 512; i++)
         pPageMap->pTopLevel[i] = g_pKernelPageMap->pTopLevel[i];
@@ -170,13 +166,26 @@ NotFound:
 }
 
 uint64_t MmVirtMap(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Flags) {
-    /*if (VirtualAddress == 0) {
+    if (VirtualAddress == 0) {
         // Find new virtual address
         VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, 1);
         pRegion->Flags = Flags;
         VirtualAddress = pRegion->VirtualAddress;
-    }*/
+    }
     MmArchVirtMap(pPageMap->pTopLevel, VirtualAddress, PhysicalAddress, Flags);
+    return VirtualAddress;
+}
+
+uint64_t MmVirtMapRange(PageMap *pPageMap, uint64_t VirtualAddress, uint64_t PhysicalAddress, uint64_t Pages, uint64_t Flags) {
+    if (VirtualAddress == 0) {
+        // Find new virtual address
+        VirtMemRegion *pRegion = MmVirtFindRegion(pPageMap, Pages);
+        pRegion->Flags = Flags;
+        VirtualAddress = pRegion->VirtualAddress;
+    }
+    for (uint64_t i = 0; i < Pages; i++) {
+        MmArchVirtMap(pPageMap->pTopLevel, VirtualAddress + (i * PAGE_SIZE), PhysicalAddress + (i * PAGE_SIZE), Flags);
+    }
     return VirtualAddress;
 }
 
@@ -186,6 +195,10 @@ void MmVirtUnmap(PageMap *pPageMap, uint64_t VirtualAddress) {
 
 uint64_t MmGetPagePhysicalAddress(PageMap *pPageMap, uint64_t VirtualAddress) {
     return MmArchGetPagePhysicalAddress(pPageMap->pTopLevel, VirtualAddress);
+}
+
+uint64_t MmGetPagePhysicalAddressOffset(PageMap *pPageMap, uint64_t VirtualAddress) {
+    return MmArchGetPagePhysicalAddressOffset(pPageMap->pTopLevel, VirtualAddress);
 }
 
 void *MmVirtAllocatePages(PageMap *pPageMap, uint64_t Pages, uint64_t Flags) {

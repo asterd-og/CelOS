@@ -12,123 +12,96 @@ Memory allocator written by: Astrido
 #include <printf.h>
 #include <assert.h>
 
-#define FREE_BIT 1
-#define BLK_GET_SIZE(Block) (Block->Size >> 1)
+HeapCtrl *pKernelHeap = NULL;
 
-Region *MmCreateRegion(AllocatorDescriptor *pAllocator, size_t AreaSize) {
-    Region *pRegion = (Region*)MmVirtAllocatePages(pAllocator->pPageMap, 1, MM_READ | MM_WRITE);
-    pRegion->FreeSize = AreaSize - sizeof(Block);
-    pRegion->TotalSize = AreaSize;
-    pRegion->pDataArea = (uint8_t*)MmVirtAllocatePages(pAllocator->pPageMap, AreaSize / PAGE_SIZE, MM_READ | MM_WRITE);
-    pRegion->pNext = NULL;
-
-    Block *pBlock = (Block*)pRegion->pDataArea;
-    pBlock->pNext = NULL;
-    pBlock->pPrev = NULL;
-    pBlock->Size = ((AreaSize - sizeof(Block)) << 1) | FREE_BIT;
-    return pRegion;
+HeapPool *MmAllocPool(size_t Size) {
+    HeapPool *pPool = MmVirtAllocatePages(g_pKernelPageMap, 1, MM_READ | MM_WRITE);
+    pPool->pNext = NULL;
+    pPool->pDataArea = MmVirtAllocatePages(g_pKernelPageMap, DIV_ROUND_UP(Size, PAGE_SIZE), MM_READ | MM_WRITE);
+    memset(pPool->pDataArea, 0, Size);
+    pPool->FreeSize = Size - sizeof(HeapBlock);
+    pPool->TotalSize = Size;
+    HeapBlock *pBlock = (HeapBlock*)pPool->pDataArea;
+    pBlock->Signature = HEAP_SIG;
+    pBlock->pPool = pPool;
+    pBlock->Size = Size - sizeof(HeapBlock);
+    return pPool;
 }
 
-AllocatorDescriptor *MmAllocInit() {
-    AllocatorDescriptor *pAllocator = (AllocatorDescriptor*)MmVirtAllocatePages(g_pKernelPageMap, 1, MM_READ | MM_WRITE);
-    pAllocator->pPageMap = MmGetPageMap();
-    pAllocator->pMainRegion = MmCreateRegion(pAllocator, PAGE_SIZE * 3);
-    return pAllocator;
+void MmAllocInit() {
+    pKernelHeap = MmVirtAllocatePages(g_pKernelPageMap, 1, MM_READ | MM_WRITE);
+    pKernelHeap->pMainPool = MmAllocPool(PAGE_SIZE * 10);
 }
 
-Block *MmSplit(Block *pBlock, size_t Size) {
-    Block *pNewBlock = (Block*)((uint8_t*)pBlock + sizeof(Block) + Size);
-    size_t OldSize = BLK_GET_SIZE(pBlock);
+void MmAllocSplitBlock(HeapBlock *pBlock, size_t TotalSize, size_t DesiredSize) {
+    HeapBlock *pNewBlock = (HeapBlock*)(((uint8_t*)pBlock) + sizeof(HeapBlock) + DesiredSize);
+    pNewBlock->Signature = HEAP_SIG;
+    pNewBlock->pPool = pBlock->pPool;
     pNewBlock->pNext = pBlock->pNext;
     pNewBlock->pPrev = pBlock;
-    pNewBlock->Size = (OldSize - Size - sizeof(Block)) << 1;
+    pNewBlock->Size = (TotalSize - sizeof(HeapBlock)) - DesiredSize;
+    pNewBlock->Status = 0;
     pBlock->pNext = pNewBlock;
-    pBlock->Size = Size << 1;
-    return pBlock;
-}
-
-void *MmInternalAlloc(AllocatorDescriptor *pAllocator, size_t Size) {
-    Region *pRegion;
-    bool Found = false;
-    for (pRegion = pAllocator->pMainRegion; pRegion->pNext != NULL; pRegion = pRegion->pNext)
-        if (pRegion->FreeSize >= Size + sizeof(Block)) {
-            Found = true;
-            break;
-        }
-    if (!Found) {
-        Region *pNewRegion = MmCreateRegion(pAllocator, ALIGN_UP(Size, PAGE_SIZE) * 2);
-        pRegion->pNext = pNewRegion;
-        pRegion = pNewRegion;
-    }
-    Block *pBlock = (Block*)pRegion->pDataArea;
-    while (pBlock && !(pBlock->Size & FREE_BIT)) {
-        if (BLK_GET_SIZE(pBlock) >= Size && (pBlock->Size & FREE_BIT))
-            break;
-        pBlock = pBlock->pNext;
-    }
-    ASSERT(pBlock);
-    if (BLK_GET_SIZE(pBlock) > Size) {
-        pBlock = MmSplit(pBlock, Size);
-        pBlock->pNext->Size |= FREE_BIT;
-        pRegion->FreeSize -= sizeof(Block);
-    }
-    pRegion->FreeSize -= Size;
-    pBlock->pRegion = (uint8_t*)pRegion;
-    pBlock->Size &= ~FREE_BIT;
-    return (void*)((uint8_t*)pBlock + sizeof(Block));
+    pBlock->Size = DesiredSize;
+    pBlock->Status = 0;
 }
 
 void *MmAlloc(size_t Size) {
-    if (Size % 0x10) {
-        // Align size to 16 so all pointers stay aligned.
-        Size -= (Size % 0x10);
-        Size += 0x10;
+    // Find appropriate pool
+    HeapPool *pPool = pKernelHeap->pMainPool;
+    while (pPool->FreeSize < Size + sizeof(HeapBlock)) {
+        if (pPool->pNext == NULL)
+            return NULL;
+        pPool = pPool->pNext;
     }
-    return MmInternalAlloc(KeSmpGetCpu()->pCurrentAllocator, Size);
+
+    // Find appropriate block
+    HeapBlock *pBlock = (HeapBlock*)pPool->pDataArea;
+    while (pBlock->Status == 1 || pBlock->Size < Size) {
+        if (pBlock->pNext == NULL)
+            return NULL;
+        pBlock = pBlock->pNext;
+    }
+
+    // Split if necessary
+    if (pBlock->Size > Size) {
+        MmAllocSplitBlock(pBlock, pBlock->Size, Size);
+        pPool->FreeSize -= sizeof(HeapBlock);
+    }
+
+    pBlock->Signature = HEAP_SIG;
+    pBlock->pPool = pPool;
+    pBlock->Status = 1;
+
+    pPool->FreeSize -= Size;
+    return (void*)(((uint8_t*)pBlock) + sizeof(HeapBlock));
 }
 
-Block *MmMerge(Block *pBlock, Region *pRegion) {
-    size_t NewSize = (BLK_GET_SIZE(pBlock) + BLK_GET_SIZE(pBlock->pNext) + sizeof(Block));
-    size_t FreedSize = BLK_GET_SIZE(pBlock) + sizeof(Block);
-    pBlock->Size = NewSize << 1;
-    pBlock->pNext = pBlock->pNext->pNext;
-    if (pBlock->pNext) pBlock->pNext->pPrev = pBlock;
-    memset((uint8_t*)pBlock + sizeof(Block), 0, NewSize);
-    pRegion->FreeSize += FreedSize;
-    return pBlock;
+void MmMerge(HeapBlock *pBlock, HeapPool *pPool) {
+    size_t NewSize = pBlock->Size + pBlock->pNext->Size + sizeof(HeapBlock);
+    size_t FreedSize = pBlock->Size + sizeof(HeapBlock);
+    pBlock->Size = NewSize;
+    if (pBlock->pNext->pNext) {
+        pBlock->pNext = pBlock->pNext->pNext;
+        pBlock->pNext->pPrev = pBlock;
+    } else
+        pBlock->pNext = NULL;
+    memset((uint8_t*)pBlock + sizeof(HeapBlock), 0, NewSize);
+    pPool->FreeSize += FreedSize;
 }
 
 void MmFree(void *pPtr) {
-    Block *pBlock = (Block*)((uint8_t*)pPtr - sizeof(Block));
-    Region *pRegion = (Region*)pBlock->pRegion;
-    // Find and merge nearby blocks.
-    while (pBlock->pNext && pBlock->pNext->Size & FREE_BIT)
-        MmMerge(pBlock, pRegion);
-    while (pBlock->pPrev && pBlock->pPrev->Size & FREE_BIT)
-        pBlock = MmMerge(pBlock->pPrev, pRegion);
-    pBlock->Size |= FREE_BIT;
-}
+    HeapBlock *pBlock = (HeapBlock*)(((uint8_t*)pPtr) - sizeof(HeapBlock));
+    ASSERT(pBlock->Signature == HEAP_SIG);
+    HeapPool *pPool = pBlock->pPool;
 
-void *MmKAlloc(size_t Size) {
-    if (Size % 0x10) {
-        // Align size to 16 so all pointers stay aligned.
-        Size -= (Size % 0x10);
-        Size += 0x10;
+    while (pBlock->pNext && pBlock->pNext->Status == 0)
+        MmMerge(pBlock, pPool);
+
+    while (pBlock->pPrev && pBlock->pPrev->Status == 0) {
+        pBlock = pBlock->pPrev;
+        MmMerge(pBlock, pPool);
     }
-    return MmInternalAlloc(g_pKernelAllocator, Size);
-}
 
-void MmKFree(void *pPtr) {
-    PageMap *pOldPageMap = MmSwitchPageMap(g_pKernelPageMap);
-    MmFree(pPtr);
-    MmSwitchPageMap(pOldPageMap);
-}
-
-void MmDestroy(AllocatorDescriptor *pAllocator) {
-    Region *pNextRegion = NULL;
-    for (Region *pRegion = pAllocator->pMainRegion; pRegion != NULL; pRegion = pNextRegion) {
-        pNextRegion = pRegion->pNext;
-        MmVirtFreePages(pAllocator->pPageMap, pRegion->pDataArea);
-        MmVirtFreePages(pAllocator->pPageMap, pRegion);
-    }
+    pBlock->Status = 0;
 }

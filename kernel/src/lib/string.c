@@ -52,3 +52,35 @@ int memcmp(const void *s1, const void *s2, size_t n) {
 
     return 0;
 }
+
+int strlen(const char *s1) {
+    int i = 0;
+    while (s1[i] != 0) i++;
+    return i;
+}
+
+char* strtok(char* str, const char* delim) {
+    static char* p = NULL;
+    if (str != NULL) { p = str; }
+    else if (p == NULL) { return NULL; }
+
+    char* start = p;
+    while (*p != '\0')  {
+        const char* d = delim;
+        while (*d != '\0') {
+            if (*p == *d) {
+                *p = '\0';
+                p++;
+                if (start == p) {
+                    start = p;
+                    continue;
+                }
+                return start;
+            }
+            d++;
+        }
+        p++;
+    }
+    if (start == p) { return NULL; }
+    return start;
+}

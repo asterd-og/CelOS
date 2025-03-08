@@ -32,6 +32,9 @@ run-x86_64: ovmf/ovmf-code-$(KARCH).fd $(IMAGE_NAME).iso
 		-drive if=pflash,unit=0,format=raw,file=ovmf/ovmf-code-$(KARCH).fd,readonly=on \
 		-cdrom $(IMAGE_NAME).iso \
 		-enable-kvm -debugcon stdio \
+		-drive id=disk,file=disk.img,if=none \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk,bus=ahci.0 \
 		$(QEMUFLAGS)
 
 .PHONY: run-hdd-x86_64
@@ -129,6 +132,9 @@ run-bios: $(IMAGE_NAME).iso
 		-cdrom $(IMAGE_NAME).iso \
 		-boot d \
 		-enable-kvm -debugcon stdio \
+		-drive id=disk,file=disk.img,if=none \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk,bus=ahci.0 \
 		$(QEMUFLAGS)
 
 .PHONY: run-hdd-bios
@@ -162,6 +168,7 @@ kernel: kernel-deps
 $(IMAGE_NAME).iso: limine/limine kernel
 	rm -rf iso_root
 	mkdir -p iso_root/boot
+	cp -v ramdisk.img iso_root/
 	cp -v kernel/bin-$(KARCH)/kernel iso_root/boot/
 	mkdir -p iso_root/boot/limine
 	cp -v limine.conf iso_root/boot/limine/

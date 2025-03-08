@@ -16,8 +16,6 @@ CpuInfo *g_pSmpCpuList;
 SpinLock g_SmpLock;
 uint64_t g_SmpStartedCount = 0;
 
-AllocatorDescriptor *g_pKernelAllocator = NULL;
-
 bool g_SmpStarted = false;
 
 void KeSmpCreateTaskQueue(CpuInfo *pCpu) {
@@ -50,7 +48,6 @@ void KeSmpCpuInit(struct limine_smp_info *pSmpInfo) {
     CpuInfo *pCpu = (CpuInfo*)pSmpInfo->extra_argument;
     MmSwitchPageMap(g_pKernelPageMap);
     pCpu->pCurrentPageMap = g_pKernelPageMap;
-    pCpu->pCurrentAllocator = g_pKernelAllocator;
 
     KeArchSmpCpuInit(pSmpInfo, &pCpu->ArchInfo);
     pCpu->CpuNum = KeArchSmpGetCpuNum();
@@ -76,8 +73,7 @@ void KeSmpInit() {
     pBspCpu->pCurrentPageMap = g_pKernelPageMap;
     pBspCpu->IPL = 0xf;
 
-    g_pKernelAllocator = MmAllocInit();
-    pBspCpu->pCurrentAllocator = g_pKernelAllocator;
+    MmAllocInit();
 
     KeSmpCreateTaskQueue(pBspCpu);
 
@@ -98,11 +94,4 @@ CpuInfo *KeSmpGetCpu() {
 
 CpuInfo *KeSmpGetCpuByNum(uint32_t Num) {
     return &g_pSmpCpuList[Num];
-}
-
-AllocatorDescriptor *KeSmpSwitchAllocator(AllocatorDescriptor *pAllocator) {
-    CpuInfo *pCpu = KeSmpGetCpu();
-    AllocatorDescriptor *pOldAllocator = pCpu->pCurrentAllocator;
-    pCpu->pCurrentAllocator = pAllocator;
-    return pOldAllocator;
 }

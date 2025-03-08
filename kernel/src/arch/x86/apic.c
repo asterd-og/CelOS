@@ -125,10 +125,11 @@ void KeIoApicRemapIrq(MadtIoApic *pIoApic, uint8_t Irq, uint8_t Vec, bool Masked
     for (uint64_t i = 0; i < g_IoApicIntSrcOvrSize; i++) {
         pSrcOvr = g_pIoApicIntSrcOvrList[i];
         if (pSrcOvr->IrqSource == Irq) {
+            bool Trigger = (Irq == 11 ? 1 : pSrcOvr->Flags & (1 << 3));
             uint32_t Gsi = pSrcOvr->Gsi;
             if (pIoApic->GsiBase > 0) Gsi -= pIoApic->GsiBase; // In case of multiple IOAPICs in a system
             KeIoApicRemapGsi(pIoApic, 0, Gsi, Vec, pSrcOvr->Flags & (1 << 1),
-                pSrcOvr->Flags & (1 << 3), Masked);
+                Trigger, Masked);
             break;
         }
         if (i + 1 == g_IoApicIntSrcOvrSize) {

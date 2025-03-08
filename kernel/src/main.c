@@ -7,6 +7,7 @@
 #include <x86/idt.h>
 #include <x86/apic.h>
 #include <x86/e9.h>
+#include <x86/pci.h>
 #endif
 
 #include <smp.h>
@@ -22,6 +23,11 @@
 #include <string.h>
 #include <panic.h>
 #include <assert.h>
+
+#include <ahci.h>
+#include <vfs.h>
+#include <fat32.h>
+#include <diskfs.h>
 
 // Set the base revision to 3, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -44,6 +50,12 @@ static volatile struct limine_framebuffer_request FramebufferRequest = {
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_hhdm_request HhdmRequest = {
     .id = LIMINE_HHDM_REQUEST,
+    .revision = 0
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_module_request ModuleRequest = {
+    .id = LIMINE_MODULE_REQUEST,
     .revision = 0
 };
 
@@ -83,18 +95,6 @@ void _putchar(char Char) {
 
 uint64_t HhdmOffset;
 
-void TaskTest() {
-    while (1) {
-        printf("A");
-    }
-}
-
-void TaskTest2() {
-    while (1) {
-        E9Write("B");
-    }
-}
-
 // The following will be our kernel's entry point.
 // If renaming kmain() to something else, make sure to change the
 // linker script accordingly.
@@ -116,7 +116,7 @@ void KeMain(void) {
     pTermCtrl = TeNew(pFramebuffer->address,
                       pFramebuffer->width, pFramebuffer->height,
                       pFramebuffer->pitch,
-                      0xff1b68ba,
+                      0xff000000,
                       0xffffffff, 0xfff39b00);
 
     KeArchInit();
@@ -124,10 +124,12 @@ void KeMain(void) {
 
     printf("Kernel Initialised.\n");
 
-    Task *pTask = KxCreateTask(TaskTest, TASK_HIGH, 1);
-    Task *pTask2 = KxCreateTask(TaskTest2, TASK_HIGH, 1);
+    IoPciInit();
+    BlkAhciInit();
 
-    KxSchedInit();
+    ASSERT(DiskFat32Mount() == 0);
+
+    //KxSchedInit();
 
     // We're done, just hang...
     hcf();

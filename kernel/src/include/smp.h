@@ -23,7 +23,6 @@ typedef struct {
     ArchCpuInfo ArchInfo;
     PageMap *pCurrentPageMap;
     uint64_t CpuNum;
-    AllocatorDescriptor *pCurrentAllocator;
 
     uint8_t IPL;
     uint8_t QueuedIrqs[256];
@@ -35,9 +34,7 @@ typedef struct {
 } CpuInfo;
 
 extern bool g_SmpStarted;
-extern AllocatorDescriptor *g_pKernelAllocator;
 
 void KeSmpInit();
 CpuInfo *KeSmpGetCpu();
 CpuInfo *KeSmpGetCpuByNum(uint32_t Num);
-AllocatorDescriptor *KeSmpSwitchAllocator(AllocatorDescriptor *pAllocator);

@@ -68,3 +68,8 @@ uint64_t MmArchGetPagePhysicalAddress(uint64_t *pPageMap, uint64_t VirtualAddres
 
     return pPageMapLevel1[PageMapLevel1Entry] & ~0xfff;
 }
+
+uint64_t MmArchGetPagePhysicalAddressOffset(uint64_t *pPageMap, uint64_t VirtualAddress) {
+    uint64_t Offset = VirtualAddress & 0xfff;
+    return MmArchGetPagePhysicalAddress(pPageMap, VirtualAddress) + Offset;
+}

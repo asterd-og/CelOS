@@ -61,7 +61,7 @@ IntStub%+%1:
     call KeHandleIsr
 
     Popaq
-    add RSP, 8 ; Pop %1
+    add RSP, 16 ; Pop %1 and error code (Gets pushed automatically by the CPU
     iretq
 %endmacro
 

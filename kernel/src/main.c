@@ -26,7 +26,7 @@
 
 #include <ahci.h>
 #include <vfs.h>
-#include <fat32.h>
+#include <bfs.h>
 #include <diskfs.h>
 
 // Set the base revision to 3, this is recommended as this is the latest
@@ -127,9 +127,20 @@ void KeMain(void) {
     IoPciInit();
     BlkAhciInit();
 
-    ASSERT(DiskFat32Mount() == 0);
+    ASSERT(DiskBfsMount() == 0);
 
-    //KxSchedInit();
+    printf("=======READING FILE A:/file.txt=================\n");
+    Vnode *pNode = FsFind("a:/file.txt");
+    printf("a:/%s: %d bytes.\n\n", pNode->Name, pNode->Size);
+    char Buffer[2048];
+    FsRead(pNode, Buffer, pNode->Size);
+    printf("%s", Buffer);
+
+    printf("=======READING FILE A:/dir_test/file_in_dir.txt=================\n");
+    pNode = FsFind("a:/dir_test/file_in_dir.txt");
+    printf("a:/dir_test/%s: %d bytes.\n\n", pNode->Name, pNode->Size);
+    FsRead(pNode, Buffer, pNode->Size);
+    printf("%s", Buffer);
 
     // We're done, just hang...
     hcf();

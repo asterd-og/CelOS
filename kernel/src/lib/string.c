@@ -53,6 +53,14 @@ int memcmp(const void *s1, const void *s2, size_t n) {
     return 0;
 }
 
+int strcmp(const char *s1, const char *s2) {
+    while (*s1 && (*s2 == *s1)) {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
 int strlen(const char *s1) {
     int i = 0;
     while (s1[i] != 0) i++;

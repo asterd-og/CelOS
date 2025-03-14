@@ -47,19 +47,30 @@ void MmAllocSplitBlock(HeapBlock *pBlock, size_t TotalSize, size_t DesiredSize) 
 }
 
 void *MmAlloc(size_t Size) {
+    if (Size % 0x10) {
+        Size -= (Size % 0x10);
+        Size += 0x10;
+    }
     // Find appropriate pool
     HeapPool *pPool = pKernelHeap->pMainPool;
     while (pPool->FreeSize < Size + sizeof(HeapBlock)) {
-        if (pPool->pNext == NULL)
-            return NULL;
+        if (pPool->pNext == NULL) {
+            HeapPool *pNewPool = MmAllocPool(ALIGN_UP(Size, PAGE_SIZE) * 4);
+            pPool->pNext = pNewPool;
+            pPool = pNewPool;
+            break;
+        }
         pPool = pPool->pNext;
     }
 
     // Find appropriate block
     HeapBlock *pBlock = (HeapBlock*)pPool->pDataArea;
     while (pBlock->Status == 1 || pBlock->Size < Size) {
-        if (pBlock->pNext == NULL)
+        if (pBlock->pNext == NULL) {
+            printf("Heap: Error Couldn't find a free block.\n");
+            ASSERT(0);
             return NULL;
+        }
         pBlock = pBlock->pNext;
     }
 

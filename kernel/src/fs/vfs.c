@@ -18,6 +18,7 @@ Vnode *FsMount(
     if (MountedCount == 25)
         return NULL;
     Vnode *pNode = (Vnode*)MmAlloc(sizeof(Vnode));
+    pNode->Type = FS_DIR;
     pNode->Inode = Inode;
     pNode->Name[0] = 'A' + MountedCount;
     pNode->Name[1] = 0;

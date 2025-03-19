@@ -34,4 +34,5 @@ typedef struct {
 
 void MmAllocInit();
 void *MmAlloc(size_t Size);
+void *MmRealloc(void *pPtr, size_t Size);
 void MmFree(void *pPtr);

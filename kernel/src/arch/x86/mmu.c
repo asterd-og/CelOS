@@ -26,7 +26,7 @@ uint64_t *MmArchGetNextLevel(uint64_t *pLevel, uint64_t Entry, bool Allocate) {
     uint64_t *pPageMapLevel = HIGHER_HALF(MmPhysAllocatePage());
     ASSERT(PHYSICAL(pPageMapLevel));
     memset(pPageMapLevel, 0, PAGE_SIZE);
-    pLevel[Entry] = (uint64_t)PHYSICAL(pPageMapLevel) | MM_READ | MM_WRITE;
+    pLevel[Entry] = (uint64_t)PHYSICAL(pPageMapLevel) | 0b111;
     return pPageMapLevel;
 }
 

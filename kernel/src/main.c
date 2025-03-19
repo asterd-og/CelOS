@@ -1,3 +1,4 @@
+#include <kernel.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -28,6 +29,8 @@
 #include <vfs.h>
 #include <bfs.h>
 #include <diskfs.h>
+
+#include <advterm.h>
 
 // Set the base revision to 3, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -88,12 +91,15 @@ static void hcf(void) {
 }
 
 TermCtrl *pTermCtrl;
+void (*PutCharCallBack)(void *, char) = TeWriteChar;
 
 void _putchar(char Char) {
-    TeWriteChar(pTermCtrl, Char);
+    PutCharCallBack(pTermCtrl, Char);
 }
 
 uint64_t HhdmOffset;
+
+void KrnlTask();
 
 // The following will be our kernel's entry point.
 // If renaming kmain() to something else, make sure to change the
@@ -113,6 +119,7 @@ void KeMain(void) {
     HhdmOffset = HhdmRequest.response->offset;
 
     struct limine_framebuffer *pFramebuffer = FramebufferRequest.response->framebuffers[0];
+
     pTermCtrl = TeNew(pFramebuffer->address,
                       pFramebuffer->width, pFramebuffer->height,
                       pFramebuffer->pitch,
@@ -129,19 +136,25 @@ void KeMain(void) {
 
     ASSERT(DiskBfsMount() == 0);
 
-    printf("=======READING FILE A:/file.txt=================\n");
-    Vnode *pNode = FsFind("a:/file.txt");
-    printf("a:/%s: %d bytes.\n\n", pNode->Name, pNode->Size);
-    char Buffer[2048];
-    FsRead(pNode, Buffer, pNode->Size);
-    printf("%s", Buffer);
+    Vnode *pFont = FsFind("a:/sfmono.fnt");
+    uint8_t *pFontBuffer = (uint8_t*)MmAlloc(pFont->Size);
+    FsRead(pFont, pFontBuffer, pFont->Size);
 
-    printf("=======READING FILE A:/dir_test/file_in_dir.txt=================\n");
-    pNode = FsFind("a:/dir_test/file_in_dir.txt");
-    printf("a:/dir_test/%s: %d bytes.\n\n", pNode->Name, pNode->Size);
-    FsRead(pNode, Buffer, pNode->Size);
-    printf("%s", Buffer);
+    KeTermInit(pFramebuffer->address,
+                      pFramebuffer->width, pFramebuffer->height,
+                      pFramebuffer->pitch,
+                      0xff000000,
+                      0xffffffff, 0xfff39b00, pFontBuffer);
+
+    printf("\x1b[33mCelOS\x1b[38m booted successfully.\n");
+
+    KxCreateTask(KrnlTask, TASK_HIGH, 0);
+    KxSchedInit();
 
     // We're done, just hang...
     hcf();
+}
+
+void KrnlTask() {
+    for (;;);
 }

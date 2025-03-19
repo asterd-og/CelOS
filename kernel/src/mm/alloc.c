@@ -88,6 +88,19 @@ void *MmAlloc(size_t Size) {
     return (void*)(((uint8_t*)pBlock) + sizeof(HeapBlock));
 }
 
+void *MmRealloc(void *pPtr, size_t Size) {
+    if (pPtr == NULL) {
+        void *pNewPtr = MmAlloc(Size);
+        return pNewPtr;
+    }
+    HeapBlock *pBlock = (HeapBlock*)(((uint8_t*)pPtr) - sizeof(HeapBlock));
+    ASSERT(pBlock->Signature == HEAP_SIG);
+    void *pNewPtr = MmAlloc(Size);
+    memcpy(pNewPtr, pPtr, (pBlock->Size > Size ? Size : pBlock->Size));
+    MmFree(pPtr);
+    return pNewPtr;
+}
+
 void MmMerge(HeapBlock *pBlock, HeapPool *pPool) {
     size_t NewSize = pBlock->Size + pBlock->pNext->Size + sizeof(HeapBlock);
     size_t FreedSize = pBlock->Size + sizeof(HeapBlock);
@@ -102,6 +115,7 @@ void MmMerge(HeapBlock *pBlock, HeapPool *pPool) {
 }
 
 void MmFree(void *pPtr) {
+    if (pPtr == NULL) return;
     HeapBlock *pBlock = (HeapBlock*)(((uint8_t*)pPtr) - sizeof(HeapBlock));
     ASSERT(pBlock->Signature == HEAP_SIG);
     HeapPool *pPool = pBlock->pPool;
